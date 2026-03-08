@@ -128,7 +128,7 @@ export class ServiceConstruct extends Construct {
       healthCheck: {
         command: [
           'CMD-SHELL',
-          `wget --no-verbose --tries=1 --timeout=5 --spider http://localhost:${props.serviceProps?.port || 3000}/ || exit 1`
+          `wget --no-verbose --tries=1 --timeout=5 --spider http://localhost:${props.serviceProps?.port || 3000}${props.serviceProps?.healthCheckPath || '/'} || exit 1`
         ],
         interval: Duration.seconds(15),
         timeout: Duration.seconds(5),
@@ -162,7 +162,7 @@ export class ServiceConstruct extends Construct {
       targetType: TargetType.IP,
       targetGroupName: `${resourceIdPrefix}-blue-tg`,
       healthCheck: {
-        path: '/',
+        path: props.serviceProps?.healthCheckPath || '/',
         interval: Duration.seconds(15),
         timeout: Duration.seconds(5),
         unhealthyThresholdCount: 3,

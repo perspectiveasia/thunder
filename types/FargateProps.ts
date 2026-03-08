@@ -43,6 +43,10 @@ interface FargateServiceProps {
    * Build arguments to pass to Docker build
    */
   readonly dockerBuildArgs?: string[];
+  /**
+   * Health check path for the container and load balancer (defaults to "/")
+   */
+  readonly healthCheckPath?: string;
 }
 
 /**
