@@ -10,7 +10,9 @@ import { Repository } from 'aws-cdk-lib/aws-ecr';
 import { Ec2Props } from '../../types/Ec2Props';
 import { getResourceIdPrefix } from '../utils';
 
-export interface EC2PipelineProps extends Ec2Props {}
+interface EC2PipelineProps extends Ec2Props {
+  instanceId: string;
+}
 
 export class PipelineConstruct extends Construct {
   private resourceIdPrefix: string;
@@ -45,7 +47,7 @@ export class PipelineConstruct extends Construct {
     });
   }
 
-  private createEcrRepository(props: EC2PipelineProps): Repository {
+  private createEcrRepository(props: Ec2Props): Repository {
     const repo = new Repository(this, 'ServiceEcrRepo', {
       repositoryName: `${this.resourceIdPrefix}-repo`,
       removalPolicy: RemovalPolicy.DESTROY,
@@ -55,7 +57,7 @@ export class PipelineConstruct extends Construct {
     return repo;
   }
 
-  private createBuildProject(props: EC2PipelineProps): PipelineProject {
+  private createBuildProject(props: Ec2Props): PipelineProject {
     let buildCommands: string[];
     let dockerfilePath = props.serviceProps?.dockerFile || 'Dockerfile';
     if (props.buildProps?.buildSystem === 'Nixpacks') {
@@ -177,22 +179,14 @@ export class PipelineConstruct extends Construct {
         phases: {
           pre_build: {
             commands: [
-              ...(this.rootDir ? [`cd ${this.rootDir}`] : []),
               `IMAGE_URI=$(cat ${imageUriPath})`,
               'echo "Deploying image: $IMAGE_URI"',
             ],
           },
           build: {
             commands: [
-              '# Use SSM to run commands on EC2 instances tagged with Name',
-              `INSTANCE_TAG=${this.resourceIdPrefix}`,
-              'echo "Finding instances with tag: $INSTANCE_TAG"',
-              'INSTANCE_IDS=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=$INSTANCE_TAG" --query "Reservations[].Instances[].InstanceId" --output text)',
-              'echo "Found instances: $INSTANCE_IDS"',
-              'for id in $INSTANCE_IDS; do',
-              '  echo "Sending SSM command to $id"',
-              `  aws ssm send-command --instance-ids $id --document-name "AWS-RunShellScript" --parameters commands="aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REPO; docker pull $IMAGE_URI; docker stop app || true; docker rm app || true; docker run -d --name app --restart unless-stopped -p 80:${props.serviceProps?.port || 3000} $IMAGE_URI" --comment "Deploy new image" --region $AWS_DEFAULT_REGION`,
-              'done',
+              `echo "Sending SSM command to EC2 instance: ${props.instanceId}"`,
+              `aws ssm send-command --instance-ids ${props.instanceId} --document-name "AWS-RunShellScript" --parameters commands="aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REPO; docker pull $IMAGE_URI; docker stop app || true; docker rm app || true; docker run -d --name app --restart unless-stopped -p 80:${props.serviceProps?.port || 3000} $IMAGE_URI" --comment "Deploy new image" --region $AWS_DEFAULT_REGION`,
             ],
           },
         },
@@ -215,7 +209,6 @@ export class PipelineConstruct extends Construct {
           'ssm:SendCommand',
           'ssm:ListCommands',
           'ssm:GetCommandInvocation',
-          'ec2:DescribeInstances',
         ],
         resources: ['*'],
       })
@@ -224,7 +217,7 @@ export class PipelineConstruct extends Construct {
     return deployProject;
   }
 
-  private createPipeline(props: EC2PipelineProps): Pipeline {
+  private createPipeline(props: Ec2Props): Pipeline {
     const sourceOutput = new Artifact('SourceOutput');
     const buildOutput = new Artifact('BuildOutput');
 

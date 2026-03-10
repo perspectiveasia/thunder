@@ -50,10 +50,17 @@ export class Ec2 extends Stack {
         throw new Error('Missing sourceProps: Github owner, repo and branch/ref required.');
       }
 
-      pipeline = new PipelineConstruct(this, 'Pipeline', props);
+      pipeline = new PipelineConstruct(this, 'Pipeline', {
+        ...props,
+        instanceId: ec2.instance.instance.instanceId,
+      });
     }
 
     // 4. Outputs
+    const mainPort = props.serviceProps?.port ?? 3000;
+    const portSuffix = mainPort === 80 ? "" : `:${mainPort}`;
+    const serviceUrl = props.domain ? `https://${props.domain}` : `http://${ec2.instance.elasticIp.ref}${portSuffix}`;
+
     new CfnOutput(this, 'InstanceId', {
       value: ec2.instance.instance.instanceId,
       description: 'EC2 Instance ID',
@@ -64,22 +71,15 @@ export class Ec2 extends Stack {
       description: 'Elastic IP address of the instance',
     });
 
-    const mainPort = props.serviceProps?.port ?? 3000;
-    const portSuffix = mainPort === 80 ? "" : `:${mainPort}`;
-    const serviceUrl = props.domain ? `https://${props.domain}` : `http://${ec2.instance.elasticIp.ref}${portSuffix}`;
+    new CfnOutput(this, 'PublicDns', {
+      value: ec2.instance.instance.instancePublicDnsName,
+      description: 'Public IPv4 DNS name of the instance',
+    });
 
     new CfnOutput(this, 'ServiceUrl', {
       value: serviceUrl,
       description: 'Service URL',
     });
-
-    if (props.domain) {
-      new CfnOutput(this, 'Route53Domain', {
-        value: `https://${props.domain}`,
-        description: 'The custom domain URL',
-        exportName: `${resourceIdPrefix}-Route53Domain`,
-      });
-    }
 
     // 5. Discovery (Metadata)
     // new DiscoveryConstruct(this, 'Discovery', {

@@ -221,7 +221,7 @@ export class PipelineConstruct extends Construct {
       }
       const yamlFile = yaml.parse(buildSpecFile);
       buildSpecYaml = BuildSpec.fromObject(yamlFile);
-    } else {        
+    } else {
       buildSpecYaml = BuildSpec.fromObject({
         version: '0.2',
         env: {
@@ -394,42 +394,6 @@ export class PipelineConstruct extends Construct {
   }
 
   /**
-   * Create webhook filter project for monorepo support
-   * @param props 
-   * @returns project
-   */
-  private createWebhookFilterProject(props: PipelineProps): Project {
-    const filterProject = new Project(this, 'WebhookFilter', {
-      projectName: `${this.resourceIdPrefix}-webhook-filter`,
-      source: Source.gitHub({
-        owner: props.sourceProps?.owner!,
-        repo: props.sourceProps?.repo!,
-        branchOrRef: props.sourceProps?.branchOrRef,
-        webhook: true,
-        webhookFilters: [
-          FilterGroup.inEventOf(EventAction.PUSH).andFilePathIs(`${this.rootDir}/**`)
-        ]
-      }),
-      buildSpec: BuildSpec.fromObject({
-        version: '0.2',
-        phases: {
-          build: {
-            commands: [`aws codepipeline start-pipeline-execution --name ${this.resourceIdPrefix}-pipeline`]
-          }
-        }
-      })
-    });
-
-    filterProject.addToRolePolicy(new PolicyStatement({
-      effect: Effect.ALLOW,
-      actions: ['codepipeline:StartPipelineExecution'],
-      resources: [`arn:aws:codepipeline:${props.env.region}:${props.env.account}:${this.resourceIdPrefix}-pipeline`]
-    }));
-
-    return filterProject;
-  }
-
-  /**
    * Create the CodePipeline
    * @param props 
    * @returns pipeline
@@ -506,7 +470,7 @@ export class PipelineConstruct extends Construct {
       branch: props.sourceProps?.branchOrRef,
       oauthToken: SecretValue.secretsManager(props.accessTokenSecretArn!),
       output: sourceOutput,
-      trigger: this.rootDir ? GitHubTrigger.NONE : GitHubTrigger.WEBHOOK
+      trigger: GitHubTrigger.WEBHOOK
     });
     
     pipeline.addStage({
@@ -562,13 +526,7 @@ export class PipelineConstruct extends Construct {
       actions: [deployAction, syncAction]
     });
 
-    // Create webhook filter project for monorepo support
-    if (this.rootDir) {
-      this.createWebhookFilterProject(props);
-    }
-
     // return our pipeline
     return pipeline;
   }
-  
 }

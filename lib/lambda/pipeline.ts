@@ -88,7 +88,7 @@ export class PipelineConstruct extends Construct {
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
       objectOwnership: ObjectOwnership.OBJECT_WRITER,
       enforceSSL: true,
-      removalPolicy: props.debug ? undefined : undefined, // Placeholder for potential removal policy logic
+      removalPolicy: RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
 
