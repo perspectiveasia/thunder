@@ -40,15 +40,19 @@ export class Template extends Stack {
     //   }
     // });
 
+    const resourceIdPrefix = `${props.application}-${props.service}-${props.environment}`;
+
     new CfnOutput(this, 'TemplateSlug', {
       value: props.templateSlug,
       description: 'The slug of the template used',
+      exportName: `${resourceIdPrefix}-TemplateSlug`,
     });
 
     if (props.domain) {
       new CfnOutput(this, 'Route53Domain', {
         value: `https://${props.domain}`,
         description: 'The custom domain URL',
+        exportName: `${resourceIdPrefix}-Route53Domain`,
       });
     }
   }

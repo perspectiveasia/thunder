@@ -64,21 +64,25 @@ export class Ec2 extends Stack {
     new CfnOutput(this, 'InstanceId', {
       value: ec2.instance.instance.instanceId,
       description: 'EC2 Instance ID',
+      exportName: `${resourceIdPrefix}-InstanceId`,
     });
 
     new CfnOutput(this, 'ElasticIp', {
       value: ec2.instance.elasticIp.ref,
       description: 'Elastic IP address of the instance',
+      exportName: `${resourceIdPrefix}-ElasticIp`,
     });
 
     new CfnOutput(this, 'PublicDns', {
       value: ec2.instance.instance.instancePublicDnsName,
       description: 'Public IPv4 DNS name of the instance',
+      exportName: `${resourceIdPrefix}-PublicDns`,
     });
 
     new CfnOutput(this, 'ServiceUrl', {
       value: serviceUrl,
       description: 'Service URL',
+      exportName: `${resourceIdPrefix}-ServiceUrl`,
     });
 
     // 5. Discovery (Metadata)

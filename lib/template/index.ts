@@ -60,11 +60,13 @@ export class TemplateConstruct extends Construct {
     new CfnOutput(this, "InstanceId", {
       value: this.instance.instance.instanceId,
       description: "EC2 Instance ID",
+      exportName: `${resourceIdPrefix}-InstanceId`,
     });
 
     new CfnOutput(this, "ElasticIp", {
       value: this.instance.elasticIp.ref,
       description: "Elastic IP address of the instance",
+      exportName: `${resourceIdPrefix}-ElasticIp`,
     });
 
     const mainPort = props.hydrateResult.exposedPorts[0] ?? 80;
@@ -75,6 +77,7 @@ export class TemplateConstruct extends Construct {
         ? `https://${props.domain}`
         : `http://${this.instance.elasticIp.ref}${portSuffix}`,
       description: "Service URL",
+      exportName: `${resourceIdPrefix}-ServiceUrl`,
     });
   }
 }
