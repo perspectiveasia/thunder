@@ -124,6 +124,7 @@ export class ServerConstruct extends Construct {
         : Duration.seconds(10),
       memorySize: props.serverProps?.memorySize || 1792,
       logGroup: new LogGroup(this, 'ServerFunctionLogGroup', {
+        logGroupName: `${this.resourceIdPrefix}-function-logs`,
         retention: RetentionDays.ONE_MONTH,
       }),
       allowPublicSubnet: false,
@@ -158,6 +159,7 @@ export class ServerConstruct extends Construct {
           : Duration.seconds(10),
         memorySize: props.serverProps?.memorySize || 1792,
         logGroup: new LogGroup(this, 'LambdaFunctionLogGroup', {
+          logGroupName: `${this.resourceIdPrefix}-function-logs`,
           retention: RetentionDays.ONE_MONTH,
         }),
         allowPublicSubnet: false,
@@ -214,15 +216,15 @@ export class ServerConstruct extends Construct {
    * @private
    */
   private createApiGateway(props: NuxtProps): HttpApi {
-    const lambdaIntegration = new HttpLambdaIntegration(`${this.resourceIdPrefix}-lambda-integration`, this.lambdaFunction);
+    const lambdaIntegration = new HttpLambdaIntegration('LambdaIntegration', this.lambdaFunction);
 
     // We want the API gateway to be accessible by the custom domain name.
     let domainName: DomainName | undefined = undefined;
 
     if (props.domain && props.regionalCertificateArn) {
-      domainName = new DomainName(this, `${this.resourceIdPrefix}-api-domain`, {
+      domainName = new DomainName(this, 'ApiDomain', {
         domainName: props.domain,
-        certificate: Certificate.fromCertificateArn(this, `${this.resourceIdPrefix}-regional-certificate`, props.regionalCertificateArn),
+        certificate: Certificate.fromCertificateArn(this, 'RegionalCertificate', props.regionalCertificateArn),
         endpointType: EndpointType.REGIONAL,
         securityPolicy: SecurityPolicy.TLS_1_2
       });
@@ -281,7 +283,7 @@ export class ServerConstruct extends Construct {
         }
     };
 
-    new Rule(this, `PingRule`, {
+    new Rule(this, 'PingRule', {
         ruleName: `${this.resourceIdPrefix}-pinger`,
         description: `Pings the Lambda function of the ${this.resourceIdPrefix} app every 5 minutes to keep it warm.`,
         enabled: true,

@@ -78,7 +78,7 @@ export class FunctionsConstruct extends Construct {
     if (props.domain && props.regionalCertificateArn) {
       this.domainName = new DomainName(this, 'DomainName', {
         domainName: props.domain,
-        certificate: Certificate.fromCertificateArn(this, `${this.resourceIdPrefix}-regional-certificate`, props.regionalCertificateArn),
+        certificate: Certificate.fromCertificateArn(this, 'RegionalCertificate', props.regionalCertificateArn),
         endpointType: EndpointType.REGIONAL,
         securityPolicy: SecurityPolicy.TLS_1_2
       });
@@ -321,7 +321,7 @@ export class FunctionsConstruct extends Construct {
    * @private
    */
   private createApiGateway(props: FunctionConstructProps): HttpApi {
-    const lambdaIntegration = new HttpLambdaIntegration(`${this.resourceIdPrefix}-lambda-integration`, this.lambdaFunction);
+    const lambdaIntegration = new HttpLambdaIntegration('LambdaIntegration', this.lambdaFunction);
 
     const apiGateway = new HttpApi(this, "API", {
       apiName: `${this.resourceIdPrefix}-api`,
@@ -351,7 +351,7 @@ export class FunctionsConstruct extends Construct {
     // Import hosted zone
     const domainParts = props.domain?.split('.') as string[];
 
-    const hostedZone = HostedZone.fromHostedZoneAttributes(this, `${this.resourceIdPrefix}-hosted-zone`, {
+    const hostedZone = HostedZone.fromHostedZoneAttributes(this, 'HostedZone', {
         hostedZoneId: props.hostedZoneId as string,
         zoneName: domainParts[domainParts.length - 1] // Support subdomains
     });
@@ -364,13 +364,13 @@ export class FunctionsConstruct extends Construct {
       }),
     });
 
-    new ARecord(this, `${this.resourceIdPrefix}-ipv4-record`, {
+    new ARecord(this, 'Ipv4Record', {
       recordName: props.domain,
       zone: hostedZone,
       target: dnsTarget
     });
 
-    new AaaaRecord(this, `${this.resourceIdPrefix}-ipv6-record`, {
+    new AaaaRecord(this, 'Ipv6Record', {
       recordName: props.domain,
       zone: hostedZone,
       target: dnsTarget

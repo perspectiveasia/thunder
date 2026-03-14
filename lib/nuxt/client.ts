@@ -183,7 +183,7 @@ export class ClientConstruct extends Construct {
      * This policy is used to set default security headers for the CloudFront distribution.
      */
     const responseHeadersPolicy = new ResponseHeadersPolicy(this, "ResponseHeadersPolicy", props.responseHeadersPolicy || {
-      // responseHeadersPolicyName: `${this.resourceIdPrefix}-response-headers-policy`,
+      // responseHeadersPolicyName: `${this.resourceIdPrefix}-rhp`,
       comment: "ResponseHeadersPolicy" + Aws.STACK_NAME + "-" + Aws.REGION,
       securityHeadersBehavior: {
         contentSecurityPolicy: {
@@ -340,6 +340,7 @@ export class ClientConstruct extends Construct {
         CacheControl.fromString('immutable'),
       ],
       logGroup: new LogGroup(this, 'BucketDeploymentLogGroup', {
+        logGroupName: `${this.resourceIdPrefix}-deployment-logs`,
         retention: RetentionDays.ONE_DAY,
       }),
       metadata: {
@@ -359,7 +360,7 @@ export class ClientConstruct extends Construct {
     const domainParts = props.domain?.split('.');
     if (!domainParts) return;
 
-    return HostedZone.fromHostedZoneAttributes(this, `${this.resourceIdPrefix}-hosted-zone`, {
+    return HostedZone.fromHostedZoneAttributes(this, 'HostedZone', {
       hostedZoneId: props.hostedZoneId as string,
       zoneName: domainParts[domainParts.length - 1] // Support subdomains
     });
@@ -376,14 +377,14 @@ export class ClientConstruct extends Construct {
     const dnsTarget = RecordTarget.fromAlias(new CloudFrontTarget(this.cdn));
 
     // Create a record for IPv4
-    new ARecord(this, `${this.resourceIdPrefix}-ipv4-record`, {
+    new ARecord(this, 'Ipv4Record', {
       recordName: props.domain,
       zone: hostedZone as IHostedZone,
       target: dnsTarget,
     });
 
     // Create a record for IPv6
-    new AaaaRecord(this, `${this.resourceIdPrefix}-ipv6-record`, {
+    new AaaaRecord(this, 'Ipv6Record', {
       recordName: props.domain,
       zone: hostedZone as IHostedZone,
       target: dnsTarget,
