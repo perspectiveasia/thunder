@@ -60,3 +60,6 @@ out
 # IDEs
 .vscode
 .idea
+
+# npmrc (contains token)
+.npmrc

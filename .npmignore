@@ -14,4 +14,3 @@ test
 *.ts
 !*.d.ts
 .agents
-.npmrc
