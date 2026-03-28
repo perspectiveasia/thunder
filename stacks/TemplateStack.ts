@@ -1,7 +1,7 @@
 import { Stack, CfnOutput } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { TemplateConstruct } from '../lib/template';
-import { DiscoveryConstruct } from '../lib/constructs/discovery';
+import { MetadataConstruct } from '../lib/constructs/metadata';
 import { TemplateProps } from '../types/TemplateProps';
 
 export class Template extends Stack {
@@ -27,18 +27,27 @@ export class Template extends Stack {
     // 1. Template (Coolify-style) Construct
     const template = new TemplateConstruct(this, 'Template', props);
 
-    // 2. Discovery (Metadata)
-    // new DiscoveryConstruct(this, 'Discovery', {
-    //   ...props,
-    //   metadata: {
-    //     type: 'Template',
-    //     TemplateSlug: props.templateSlug,
-    //     InstanceId: template.instance.instance.instanceId,
-    //     ElasticIp: template.instance.elasticIp.ref,
-    //     ServiceUrl: props.domain ? `https://${props.domain}` : `http://${template.instance.elasticIp.ref}`,
-    //     Route53Domain: props.domain ? `https://${props.domain}` : undefined,
-    //   }
-    // });
+    // 2. Metadata
+    new MetadataConstruct(this, 'Metadata', {
+      ...props,
+      stackType: 'TEMPLATE',
+      stackProps: {
+        templateSlug: props.templateSlug,
+        instanceType: props.instanceType,
+        authorizedKeys: props.authorizedKeys,
+        hydrateResult: props.hydrateResult,
+        domain: props.domain,
+        hostedZoneId: props.hostedZoneId,
+        acmeEmail: props.acmeEmail,
+      },
+      resources: {
+        TemplateSlug: props.templateSlug,
+        InstanceId: template.instance.instance.instanceId,
+        ElasticIp: template.instance.elasticIp.ref,
+        ServiceUrl: props.domain ? `https://${props.domain}` : `http://${template.instance.elasticIp.ref}`,
+        Route53Domain: props.domain ? `https://${props.domain}` : undefined,
+      }
+    });
 
     const resourceIdPrefix = `${props.application}-${props.service}-${props.environment}`;
 

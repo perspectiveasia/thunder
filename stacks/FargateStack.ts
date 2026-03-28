@@ -2,7 +2,7 @@ import { Stack } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { ServiceConstruct } from '../lib/fargate/service';
 import { PipelineConstruct } from '../lib/fargate/pipeline';
-import { DiscoveryConstruct } from '../lib/constructs/discovery';
+import { MetadataConstruct } from '../lib/constructs/metadata';
 import { FargateProps } from '../types/FargateProps';
 import { getResourceIdPrefix } from '../lib/utils';
 
@@ -39,16 +39,23 @@ export class Fargate extends Stack {
       });
     }
 
-    // Discovery (Metadata)
-    // new DiscoveryConstruct(this, 'Discovery', {
-    //   ...props,
-    //   metadata: {
-    //     type: 'Fargate',
-    //     LoadBalancerDNS: fargate.loadBalancerDnsName,
-    //     ServiceUrl: props.domain ? `https://${props.domain}` : `http://${fargate.loadBalancerDnsName}`,
-    //     Route53Domain: props.domain ? `https://${props.domain}` : undefined,
-    //     CodePipelineName: pipeline?.codePipeline.pipelineName,
-    //   }
-    // });
+    // Metadata
+    new MetadataConstruct(this, 'Metadata', {
+      ...props,
+      stackType: 'FARGATE',
+      stackProps: {
+        serviceProps: props.serviceProps,
+        domain: props.domain,
+        globalCertificateArn: props.globalCertificateArn,
+        hostedZoneId: props.hostedZoneId,
+      },
+      resources: {
+        LoadBalancerDNS: fargate.loadBalancerDnsName,
+        LoadBalancerArn: fargate.loadBalancer.loadBalancerArn,
+        ServiceUrl: props.domain ? `https://${props.domain}` : `http://${fargate.loadBalancerDnsName}`,
+        Route53Domain: props.domain ? `https://${props.domain}` : undefined,
+        CodePipelineName: pipeline?.codePipeline.pipelineName,
+      }
+    });
   }
 }

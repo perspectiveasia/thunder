@@ -3,7 +3,7 @@ import { Construct } from 'constructs';
 import { Repository } from 'aws-cdk-lib/aws-ecr';
 import { FunctionsConstruct } from '../lib/lambda/functions';
 import { PipelineConstruct } from '../lib/lambda/pipeline';
-import { DiscoveryConstruct } from '../lib/constructs/discovery';
+import { MetadataConstruct } from '../lib/constructs/metadata';
 import { LambdaProps } from '../types/LambdaProps';
 import { getResourceIdPrefix } from '../lib/utils';
 
@@ -49,17 +49,24 @@ export class Lambda extends Stack {
       });
     }
 
-    // Discovery (Metadata)
-    // new DiscoveryConstruct(this, 'Discovery', {
-    //   ...props,
-    //   metadata: {
-    //     type: 'Lambda',
-    //     LambdaFunction: lambda.lambdaFunction.functionName,
-    //     ApiGatewayUrl: lambda.apiGateway?.url || '',
-    //     LambdaFunctionUrl: lambda.lambdaFunctionUrl?.url || '',
-    //     Route53Domain: props.domain ? `https://${props.domain}` : undefined,
-    //     CodePipelineName: pipeline?.codePipeline.pipelineName,
-    //   }
-    // });
+    // Metadata
+    new MetadataConstruct(this, 'Metadata', {
+      ...props,
+      stackType: 'LAMBDA',
+      stackProps: {
+        functionProps: props.functionProps,
+        domain: props.domain,
+        regionalCertificateArn: props.regionalCertificateArn,
+        hostedZoneId: props.hostedZoneId,
+      },
+      resources: {
+        LambdaFunction: lambda.lambdaFunction.functionName,
+        LambdaFunctionArn: lambda.lambdaFunction.functionArn,
+        ApiGatewayUrl: lambda.apiGateway?.url,
+        LambdaFunctionUrl: lambda.lambdaFunctionUrl?.url,
+        Route53Domain: props.domain ? `https://${props.domain}` : undefined,
+        CodePipelineName: pipeline?.codePipeline.pipelineName,
+      }
+    });
   }
 }

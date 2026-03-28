@@ -3,7 +3,7 @@ import { Construct } from 'constructs';
 import { ARecord, HostedZone, RecordTarget } from 'aws-cdk-lib/aws-route53';
 import { ComputeConstruct } from '../lib/ec2/compute';
 import { PipelineConstruct } from '../lib/ec2/pipeline';
-import { DiscoveryConstruct } from '../lib/constructs/discovery';
+import { MetadataConstruct } from '../lib/constructs/metadata';
 import { Ec2Props } from '../types/Ec2Props';
 import { getResourceIdPrefix } from '../lib/utils';
 
@@ -85,18 +85,24 @@ export class Ec2 extends Stack {
       exportName: `${resourceIdPrefix}-ServiceUrl`,
     });
 
-    // 5. Discovery (Metadata)
-    // new DiscoveryConstruct(this, 'Discovery', {
-    //   ...props,
-    //   metadata: {
-    //     type: 'EC2',
-    //     InstanceId: ec2.instance.instance.instanceId,
-    //     ElasticIp: ec2.instance.elasticIp.ref,
-    //     ServiceUrl: serviceUrl,
-    //     Route53Domain: props.domain ? `https://${props.domain}` : undefined,
-    //     CodePipelineName: pipeline?.codePipeline.pipelineName,
-    //   }
-    // });
+    // 5. Metadata
+    new MetadataConstruct(this, 'Metadata', {
+      ...props,
+      stackType: 'EC2',
+      stackProps: {
+        serviceProps: props.serviceProps,
+        domain: props.domain,
+        hostedZoneId: props.hostedZoneId,
+        acmeEmail: props.acmeEmail,
+      },
+      resources: {
+        InstanceId: ec2.instance.instance.instanceId,
+        ElasticIp: ec2.instance.elasticIp.ref,
+        ServiceUrl: serviceUrl,
+        Route53Domain: props.domain ? `https://${props.domain}` : undefined,
+        CodePipelineName: pipeline?.codePipeline.pipelineName,
+      }
+    });
 
   }
 }

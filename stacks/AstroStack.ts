@@ -2,7 +2,7 @@ import { Stack } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { AstroConstruct } from '../lib/astro';
 import { FrameworkPipeline } from '../lib/frameworks/pipeline';
-import { DiscoveryConstruct } from '../lib/constructs/discovery';
+import { MetadataConstruct } from '../lib/constructs/metadata';
 import { NuxtProps as AstroProps } from '../types/NuxtProps';
 
 export class Astro extends Stack {
@@ -18,16 +18,24 @@ export class Astro extends Stack {
       pipeline = new FrameworkPipeline(this, 'Pipeline', props);
     }
 
-    // 3. Discovery (Metadata)
-    // new DiscoveryConstruct(this, 'Discovery', {
-    //   ...props,
-    //   metadata: {
-    //     type: 'Astro',
-    //     DistributionId: astro.client.cdn.distributionId,
-    //     DistributionUrl: `https://${astro.client.cdn.distributionDomainName}`,
-    //     Route53Domain: props.domain ? `https://${props.domain}` : undefined,
-    //     CodePipelineName: pipeline?.codePipeline.pipelineName,
-    //   }
-    // });
+    // 3. Metadata
+    new MetadataConstruct(this, 'Metadata', {
+      ...props,
+      stackType: 'ASTRO',
+      stackProps: {
+        serverProps: props.serverProps,
+        domain: props.domain,
+        globalCertificateArn: props.globalCertificateArn,
+        regionalCertificateArn: props.regionalCertificateArn,
+        hostedZoneId: props.hostedZoneId,
+      },
+      resources: {
+        DistributionId: astro.client.cdn.distributionId,
+        DistributionUrl: `https://${astro.client.cdn.distributionDomainName}`,
+        LambdaFunctionArn: astro.server.lambdaFunction.functionArn,
+        Route53Domain: props.domain ? `https://${props.domain}` : undefined,
+        CodePipelineName: pipeline?.codePipeline.pipelineName,
+      }
+    });
   }
 }

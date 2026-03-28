@@ -2,7 +2,7 @@ import { Stack } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { NuxtConstruct } from '../lib/nuxt';
 import { FrameworkPipeline } from '../lib/frameworks/pipeline';
-import { DiscoveryConstruct } from '../lib/constructs/discovery';
+import { MetadataConstruct } from '../lib/constructs/metadata';
 import { NuxtProps } from '../types/NuxtProps';
 
 export class Nuxt extends Stack {
@@ -18,16 +18,24 @@ export class Nuxt extends Stack {
       pipeline = new FrameworkPipeline(this, 'Pipeline', props);
     }
 
-    // 3. Discovery (Metadata)
-    // new DiscoveryConstruct(this, 'Discovery', {
-    //   ...props,
-    //   metadata: {
-    //     type: 'Nuxt',
-    //     DistributionId: nuxt.client.cdn.distributionId,
-    //     DistributionUrl: `https://${nuxt.client.cdn.distributionDomainName}`,
-    //     Route53Domain: props.domain ? `https://${props.domain}` : undefined,
-    //     CodePipelineName: pipeline?.codePipeline.pipelineName,
-    //   }
-    // });
+    // 3. Metadata
+    new MetadataConstruct(this, 'Metadata', {
+      ...props,
+      stackType: 'NUXT',
+      stackProps: {
+        serverProps: props.serverProps,
+        domain: props.domain,
+        globalCertificateArn: props.globalCertificateArn,
+        regionalCertificateArn: props.regionalCertificateArn,
+        hostedZoneId: props.hostedZoneId,
+      },
+      resources: {
+        DistributionId: nuxt.client.cdn.distributionId,
+        DistributionUrl: `https://${nuxt.client.cdn.distributionDomainName}`,
+        LambdaFunctionArn: nuxt.server.lambdaFunction.functionArn,
+        Route53Domain: props.domain ? `https://${props.domain}` : undefined,
+        CodePipelineName: pipeline?.codePipeline.pipelineName,
+      }
+    });
   }
 }

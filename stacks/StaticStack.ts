@@ -3,7 +3,7 @@ import { Construct } from 'constructs';
 import { HostingConstruct } from '../lib/static/hosting';
 import { PipelineConstruct } from '../lib/static/pipeline';
 import { DeployConstruct } from '../lib/static/deploy';
-import { DiscoveryConstruct } from '../lib/constructs/discovery';
+import { MetadataConstruct } from '../lib/constructs/metadata';
 import { StaticProps } from '../types/StaticProps'
 
 export class Static extends Stack {
@@ -32,16 +32,25 @@ export class Static extends Stack {
       });
     }
 
-    // 4. Discovery (Metadata)
-    // new DiscoveryConstruct(this, 'Discovery', {
-    //   ...props,
-    //   metadata: {
-    //     type: 'Static',
-    //     DistributionId: hosting.distribution.distributionId,
-    //     DistributionUrl: `https://${hosting.distribution.distributionDomainName}`,
-    //     Route53Domain: props.domain ? `https://${props.domain}` : undefined,
-    //     CodePipelineName: pipeline?.codePipeline.pipelineName,
-    //   }
-    // });
+    // 4. Metadata
+    new MetadataConstruct(this, 'Metadata', {
+      ...props,
+      stackType: 'STATIC',
+      stackProps: {
+        outputDir: props.outputDir,
+        domain: props.domain,
+        globalCertificateArn: props.globalCertificateArn,
+        hostedZoneId: props.hostedZoneId,
+        redirects: props.redirects,
+        rewrites: props.rewrites,
+        headers: props.headers,
+      },
+      resources: {
+        DistributionId: hosting.distribution.distributionId,
+        DistributionUrl: `https://${hosting.distribution.distributionDomainName}`,
+        Route53Domain: props.domain ? `https://${props.domain}` : undefined,
+        CodePipelineName: pipeline?.codePipeline.pipelineName,
+      }
+    });
   }
 }
