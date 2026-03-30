@@ -18,12 +18,12 @@ Based on analysis of existing Nuxt and Astro constructs, TanStack Start document
 | Framework | Client Builder | Server Runtime | Default Output | Handler | Nitro Preset | Notes |
 |-----------|---------------|----------------|----------------|---------|--------------|-------|
 | Nuxt | Vite | Nitro | `.output/public`, `.output/server` | `index.handler` | `aws-lambda` | NITRO_PRESET=aws-lambda |
-| Astro | Vite | Nitro (via adapter) | `.output/public`, `.output/server` | `index.handler` | `aws-lambda` | Uses Lambda@Edge for fallback |
+| Astro | Vite | @astro-aws/adapter | `dist/client`, `dist/lambda` | `entry.handler` | N/A | Uses Lambda@Edge for fallback |
 | TanStack Start | Vite | Nitro | `.output/public`, `.output/server` | `index.handler` | `aws-lambda` | Streaming enabled by default |
 | Remix/RR v7 | Vite | Custom/Nitro | `build/client`, `build/server` | `index.handler` | `aws-lambda` | Framework mode uses Nitro |
 | SvelteKit | Vite | Adapter-based | `build/client`, `build/server` | Adapter-specific | N/A | Multiple Lambda adapters available |
 | Solid Start | Vite | Nitro | `.output/public`, `.output/server` | `index.handler` | `aws-lambda-streaming` | aws-lambda-streaming preset |
-| AnalogJS | Vite | Nitro | `dist/analog/public`, `dist/analog/server` | `index.mjs` | `aws-lambda` | Angular-based, uses Nitro |
+| AnalogJS | Vite | Nitro | `dist/analog/public`, `dist/analog/server` | `index.handler` | `aws-lambda` | Angular-based, uses Nitro |
 
 ## Proposed Architecture
 
@@ -165,12 +165,11 @@ export const FRAMEWORK_CONFIGS: Record<string, FrameworkConfig> = {
   },
   astro: {
     name: 'Astro',
-    defaultServerDir: '.output/server',
-    defaultClientDir: '.output/public',
-    defaultHandler: 'index.handler',
+    defaultServerDir: 'dist/lambda',
+    defaultClientDir: 'dist/client',
+    defaultHandler: 'entry.handler',
     defaultServerPaths: ['/api/*'],
     requiresFallbackEdge: true,
-    nitroPreset: 'aws-lambda',
   },
   'tanstack-start': {
     name: 'TanStack Start',
@@ -212,7 +211,7 @@ export const FRAMEWORK_CONFIGS: Record<string, FrameworkConfig> = {
     name: 'AnalogJS',
     defaultServerDir: 'dist/analog/server',
     defaultClientDir: 'dist/analog/public',
-    defaultHandler: 'index.mjs',
+    defaultHandler: 'index.handler',
     defaultServerPaths: ['/api/*'],
     requiresFallbackEdge: false,
     nitroPreset: 'aws-lambda',
@@ -453,7 +452,7 @@ import { Nuxt } from '@thunder-so/thunder';
 ### AnalogJS
 - Angular-based framework using Nitro for serverless deployment
 - Build output: `dist/analog/server` and `dist/analog/public`
-- Handler: `index.mjs` (uses .mjs extension)
+- Handler: `index.handler` (Lambda handler format is `file.function`)
 - Uses standard `aws-lambda` preset
 - Supports various deployment targets via Nitro presets
 
@@ -461,14 +460,14 @@ import { Nuxt } from '@thunder-so/thunder';
 - Current implementation reference
 - NITRO_PRESET=aws-lambda
 - Build output: `.output/server` and `.output/public`
+- Handler: `index.handler`
 
 ### Astro
+- Uses `@astro-aws/adapter` for AWS Lambda deployment
+- Build output: `dist/lambda` (server) and `dist/client` (client)
+- Handler: `entry.handler`
 - Requires Lambda@Edge fallback for SPA-style routing
 - Handles 404 → index.html redirects via edge function
-### Astro
-- Requires Lambda@Edge fallback for SPA-style routing
-- Handles 404 → index.html redirects via edge function
-- Build output: `.output/server` and `.output/public`
 
 ## Container Mode: Dockerfile Specifications
 
@@ -489,14 +488,14 @@ All Dockerfiles must:
 # Use AWS Lambda Node.js 24 base image
 FROM public.ecr.aws/lambda/nodejs:24
 
-# Copy package files for dependency installation
-COPY package*.json ./
+# Copy package files (from the server directory context)
+COPY package.json ./
 
-# Install only production dependencies
-RUN npm ci --only=production
+# Note: Dependencies are already bundled in the Nitro server build
+# The node_modules from the build are included in the context
 
-# Copy the built server output from Nitro
-COPY .output/server/ ./
+# Copy all server files (index.mjs, chunks/, node_modules/)
+COPY . ./
 
 # Set the Lambda handler
 CMD ["index.handler"]
@@ -513,14 +512,14 @@ CMD ["index.handler"]
 # Use AWS Lambda Node.js 24 base image
 FROM public.ecr.aws/lambda/nodejs:24
 
-# Copy package files
-COPY package*.json ./
+# Copy package files (from the server directory context)
+COPY package.json ./
 
-# Install production dependencies
-RUN npm ci --only=production
+# Note: Dependencies are already bundled in the server build
+# The node_modules from the build are included in the context
 
-# Copy the built server output
-COPY build/server/ ./
+# Copy all server files
+COPY . ./
 
 # Set the Lambda handler
 CMD ["index.handler"]
@@ -537,17 +536,13 @@ CMD ["index.handler"]
 # Use AWS Lambda Node.js 24 base image
 FROM public.ecr.aws/lambda/nodejs:24
 
-# Copy package files
-COPY package*.json ./
+# Copy package files (from the server directory context)
+COPY package.json ./
 
-# Install production dependencies
-RUN npm ci --only=production
+# Note: Dependencies and adapter files are already bundled in the build
 
-# Copy the built server output (adapter-dependent)
-COPY build/server/ ./
-
-# Copy any additional adapter-specific files
-COPY build/ ./
+# Copy all server files (adapter-dependent)
+COPY . ./
 
 # Set the Lambda handler (adapter-specific)
 CMD ["index.handler"]
@@ -565,14 +560,14 @@ CMD ["index.handler"]
 # Use AWS Lambda Node.js 24 base image
 FROM public.ecr.aws/lambda/nodejs:24
 
-# Copy package files
-COPY package*.json ./
+# Copy package files (from the server directory context)
+COPY package.json ./
 
-# Install production dependencies
-RUN npm ci --only=production
+# Note: Dependencies are already bundled in the Nitro server build
+# The node_modules from the build are included in the context
 
-# Copy the built server output
-COPY .output/server/ ./
+# Copy all server files (index.mjs, chunks/, node_modules/)
+COPY . ./
 
 # Set the Lambda handler
 CMD ["index.handler"]
@@ -589,23 +584,23 @@ CMD ["index.handler"]
 # Use AWS Lambda Node.js 24 base image
 FROM public.ecr.aws/lambda/nodejs:24
 
-# Copy package files
-COPY package*.json ./
+# Copy package files (from the server directory context)
+COPY package.json ./
 
-# Install production dependencies
-RUN npm ci --only=production
+# Note: Dependencies are already bundled in the AnalogJS server build
+# The node_modules from the build are included in the context
 
-# Copy the built server output
-COPY dist/analog/server/ ./
+# Copy all server files (index.mjs, chunks/, node_modules/)
+COPY . ./
 
 # Set the Lambda handler
-CMD ["index.mjs"]
+CMD ["index.handler"]
 ```
 
 **Build Context:**
 - Build the app first: `npm run build`
 - Server output: `dist/analog/server/`
-- Handler: `index.mjs` (note: .mjs extension)
+- Handler: `index.handler` (Lambda handler format is `file.function`)
 
 ### Nuxt Dockerfile
 
@@ -616,14 +611,14 @@ FROM public.ecr.aws/lambda/nodejs:24
 # Set Nitro preset environment variable
 ENV NITRO_PRESET=aws-lambda
 
-# Copy package files
-COPY package*.json ./
+# Copy package files (from the server directory context)
+COPY package.json ./
 
-# Install production dependencies
-RUN npm ci --only=production
+# Note: Dependencies are already bundled in the Nitro server build
+# The node_modules from the build are included in the context
 
-# Copy the built server output
-COPY .output/server/ ./
+# Copy all server files (index.mjs, chunks/, node_modules/)
+COPY . ./
 
 # Set the Lambda handler
 CMD ["index.handler"]
@@ -641,23 +636,20 @@ CMD ["index.handler"]
 # Use AWS Lambda Node.js 24 base image
 FROM public.ecr.aws/lambda/nodejs:24
 
-# Copy package files
-COPY package*.json ./
-
-# Install production dependencies
-RUN npm ci --only=production
-
-# Copy the built server output
-COPY .output/server/ ./
+# Copy all server files from dist/lambda/
+# Note: Dependencies are already bundled in entry.mjs by @astro-aws/adapter
+# No package.json needed since all dependencies are bundled
+COPY . ./
 
 # Set the Lambda handler
-CMD ["index.handler"]
+CMD ["entry.handler"]
 ```
 
 **Build Context:**
 - Build the app first: `npm run build`
-- Server output: `.output/server/`
-- Handler: `index.handler`
+- Server output: `dist/lambda/` (contains `entry.mjs` with bundled dependencies)
+- Client output: `dist/client/`
+- Handler: `entry.handler`
 - Note: Requires Lambda@Edge fallback for SPA routing
 
 ### Multi-Stage Build Optimization
@@ -678,16 +670,17 @@ RUN npm run build
 # Production stage
 FROM public.ecr.aws/lambda/nodejs:24
 
-# Copy package files for production dependencies
-COPY package*.json ./
-RUN npm ci --only=production
+# Change to the server output directory as build context
+WORKDIR /var/task
 
-# Copy built server from builder stage
+# Copy built server from builder stage (includes package.json, index.mjs, chunks/, node_modules/)
 COPY --from=builder /app/.output/server/ ./
 
 # Set the Lambda handler
 CMD ["index.handler"]
 ```
+
+**Note:** When using CDK's `DockerImageCode`, the build context is automatically set to the server output directory (e.g., `.output/server/`), so all COPY commands are relative to that directory.
 
 ### Container Build Commands
 
@@ -817,7 +810,7 @@ export default defineConfig({
 **Build Output:**
 - Server: `dist/analog/server/index.mjs`
 - Client: `dist/analog/public/`
-- Handler: `index.mjs`
+- Handler: `index.handler` (Lambda handler format is `file.function`)
 
 ### Nuxt Configuration
 
@@ -835,13 +828,17 @@ NITRO_PRESET=aws-lambda
 **astro.config.mjs:**
 ```javascript
 import { defineConfig } from 'astro/config';
-import aws from 'astro-sst';
+import aws from '@astro-aws/adapter';
 
 export default defineConfig({
   adapter: aws(),
   output: 'server'
 });
 ```
+
+**Build Output:**
+- Server: `dist/lambda/entry.mjs` (exports `handler`)
+- Client: `dist/client/`
 
 **Note:** Requires Lambda@Edge fallback function for client-side routing.
 

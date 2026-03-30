@@ -5,7 +5,6 @@ export { Fargate } from './stacks/FargateStack';
 export { Ec2 } from './stacks/Ec2Stack';
 export { Template } from './stacks/TemplateStack';
 export { Nuxt } from './stacks/NuxtStack';
-export { Astro } from './stacks/AstroStack';
 export { Vpc } from './stacks/VpcStack';
 
 // Serverless framework stacks (new unified abstraction)
@@ -22,6 +21,7 @@ export type { NuxtProps as AstroProps } from './types/NuxtProps';
 
 // Serverless framework types
 export type { ServerlessBaseProps as TanStackStartProps } from './lib/serverless/types/ServerlessProps';
+export type { ServerlessBaseProps as AstroProps } from './lib/serverless/types/ServerlessProps';
 export type { ServerlessBaseProps as ReactRouterProps } from './lib/serverless/types/ServerlessProps';
 export type { ServerlessBaseProps as SvelteKitProps } from './lib/serverless/types/ServerlessProps';
 export type { ServerlessBaseProps as SolidStartProps } from './lib/serverless/types/ServerlessProps';
