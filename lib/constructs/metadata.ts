@@ -3,12 +3,21 @@ import { Construct } from 'constructs';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { BucketDeployment, Source } from 'aws-cdk-lib/aws-s3-deployment';
 import { AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId } from 'aws-cdk-lib/custom-resources';
+import { createRequire } from 'module';
 import { AppProps } from '../../types/AppProps';
+import { SourceProps } from '../../types/PipelineProps';
+
+const require = createRequire(import.meta.url);
+const { version: STACK_VERSION } = require('../../package.json');
 
 export interface MetadataProps extends AppProps {
   readonly stackType: string;
-  readonly stackProps: Record<string, any>;
+  readonly stackProps?: Record<string, any>;
   readonly resources: Record<string, any>;
+  readonly sourceProps?: SourceProps;
+  readonly buildProps?: Record<string, any>;
+  readonly accessTokenSecretArn?: string;
+  readonly eventTarget?: string;
 }
 
 export class MetadataConstruct extends Construct {
@@ -40,34 +49,55 @@ export class MetadataConstruct extends Construct {
 
     const discoveryBucket = Bucket.fromBucketName(this, 'DiscoveryBucket', bucketName);
 
-    const metadataContent = {
-      name: props.service,
-      stack_type: props.stackType,
-      stack_version: '1.1.0', // TODO: Read from package.json dynamically
-      owner: props.sourceProps?.owner,
-      repo: props.sourceProps?.repo,
-      branch: props.sourceProps?.branchOrRef,
+    // Context metadata content (for context.json)
+    const contextMetadata = {
+      debug: props.debug || false,
       rootDir: props.rootDir || '/',
-      metadata: props.stackProps,
-      resources: props.resources,
-      created_at: new Date().toISOString(),
-      environment_id: `${props.application}-${props.environment}`,
+      ...(props.stackProps || {}),
+      sourceProps: props.sourceProps,
+      buildProps: props.buildProps,
+      env: {
+        region: region,
+        account: account,
+      },
+      application: props.application,
+      service: props.service,
+      environment: props.environment,
+      accessTokenSecretArn: props.accessTokenSecretArn,
+      eventTarget: props.eventTarget,
+      contextDirectory: props.contextDirectory,
     };
 
+    const contextContent = {
+      metadata: contextMetadata
+    };
+
+    // Metadata content (for metadata.json)
+    const metadataContent = {
+      stack_type: props.stackType,
+      stack_version: STACK_VERSION,
+      resources: props.resources,
+      created_at: new Date().toISOString(),
+    };
+
+    const destinationPrefix = `apps/${props.application}/${props.environment}/${props.service}`;
+
     const deployment = new BucketDeployment(this, 'Metadata', {
-      sources: [Source.jsonData('metadata.json', metadataContent)],
+      sources: [
+        Source.jsonData('metadata.json', metadataContent),
+        Source.jsonData('context.json', contextContent),
+      ],
       destinationBucket: discoveryBucket,
-      destinationKeyPrefix: `apps/${props.application}/${props.environment}/${props.service}`,
+      destinationKeyPrefix: destinationPrefix,
       prune: false,
       retainOnDelete: true,
     });
 
     deployment.node.addDependency(bucketChecker);
 
-    // Track updates and deletes
-    const metadataKey = `apps/${props.application}/${props.environment}/${props.service}/metadata.json`;
-    
-    new AwsCustomResource(this, 'MetadataTimestamps', {
+    const metadataKey = `${destinationPrefix}/metadata.json`;
+
+    const metadataTimestamps = new AwsCustomResource(this, 'MetadataTimestamps', {
       onUpdate: {
         service: 'S3',
         action: 'putObject',
@@ -94,5 +124,7 @@ export class MetadataConstruct extends Construct {
       policy: AwsCustomResourcePolicy.fromSdkCalls({ resources: [`arn:aws:s3:::${bucketName}/*`] }),
       installLatestAwsSdk: false,
     });
+
+    metadataTimestamps.node.addDependency(deployment);
   }
 }
