@@ -342,6 +342,256 @@ new Astro(new Cdk.App(), 'myapp-web-prod-stack', config);
 
 ---
 
+### Serverless Frameworks
+
+Deploy modern meta-frameworks as serverless applications with unified infrastructure - Lambda for server-side rendering and S3 for static assets, all behind CloudFront.
+
+**Best for:** Full-stack applications with server-side rendering, API routes, and static asset optimization
+
+**AWS Resources:**
+- [Lambda Function](https://aws.amazon.com/lambda/) - SSR server with container support
+- [S3 Bucket](https://aws.amazon.com/s3/) - Static assets with OAC
+- [CloudFront Distribution](https://aws.amazon.com/cloudfront/) - Global CDN with custom domain
+- [API Gateway](https://aws.amazon.com/api-gateway/) - HTTP API for server functions
+- [Route53](https://aws.amazon.com/route53/) - DNS management (optional)
+- [ACM](https://aws.amazon.com/certificate-manager/) - SSL certificates (optional)
+
+**Supported Frameworks:**
+- [TanStack Start](https://tanstack.com/start) - Type-safe full-stack React framework
+- [Nuxt](https://nuxt.com/) - Vue-based full-stack framework
+- [Astro](https://astro.build/) - Content-focused web framework with islands architecture
+- [React Router v7](https://reactrouter.com/) - Full-stack React framework with nested routing
+- [SvelteKit](https://kit.svelte.dev/) - Svelte-based full-stack framework
+- [Solid Start](https://start.solidjs.com/) - SolidJS full-stack framework
+- [AnalogJS](https://analogjs.org/) - Angular-based full-stack framework
+
+#### TanStack Start
+
+**Example:**
+```typescript
+import { Cdk, TanStackStart, type TanStackStartProps } from '@thunder-so/thunder';
+
+const config: TanStackStartProps = {
+  env: { account: '123456789012', region: 'us-east-1' },
+  application: 'myapp',
+  service: 'web',
+  environment: 'prod',
+  rootDir: '.',
+  
+  serverProps: {
+    runtime: Cdk.aws_lambda.Runtime.NODEJS_22_X,
+    architecture: Cdk.aws_lambda.Architecture.ARM_64,
+    memorySize: 1792,
+    timeout: 10,
+    keepWarm: true,
+    variables: [{ NODE_ENV: 'production' }],
+  },
+  
+  // Optional: Custom domain
+  domain: 'myapp.com',
+  globalCertificateArn: 'arn:aws:acm:us-east-1:...',
+  hostedZoneId: 'Z123456789',
+};
+
+new TanStackStart(new Cdk.App(), 'myapp-web-prod-stack', config);
+```
+
+#### Nuxt
+
+**Example:**
+```typescript
+import { Cdk, Nuxt, type NuxtProps } from '@thunder-so/thunder';
+
+const config: NuxtProps = {
+  env: { account: '123456789012', region: 'us-east-1' },
+  application: 'myapp',
+  service: 'web',
+  environment: 'prod',
+  rootDir: '.',
+  
+  serverProps: {
+    runtime: Cdk.aws_lambda.Runtime.NODEJS_22_X,
+    architecture: Cdk.aws_lambda.Architecture.ARM_64,
+    memorySize: 1792,
+    timeout: 10,
+    keepWarm: true,
+    streaming: true,
+    variables: [{ NODE_ENV: 'production' }],
+    secrets: [{ key: 'DATABASE_URL', resource: 'arn:aws:secretsmanager:...' }],
+  },
+  
+  // Optional: Custom domain
+  domain: 'myapp.com',
+  globalCertificateArn: 'arn:aws:acm:us-east-1:...',
+  hostedZoneId: 'Z123456789',
+};
+
+new Nuxt(new Cdk.App(), 'myapp-web-prod-stack', config);
+```
+
+#### Astro
+
+**Example:**
+```typescript
+import { Cdk, Astro, type AstroProps } from '@thunder-so/thunder';
+
+const config: AstroProps = {
+  env: { account: '123456789012', region: 'us-east-1' },
+  application: 'myapp',
+  service: 'web',
+  environment: 'prod',
+  rootDir: '.',
+  
+  serverProps: {
+    runtime: Cdk.aws_lambda.Runtime.NODEJS_22_X,
+    architecture: Cdk.aws_lambda.Architecture.ARM_64,
+    memorySize: 1024,
+    timeout: 10,
+    keepWarm: true,
+    variables: [{ NODE_ENV: 'production' }],
+  },
+  
+  // Optional: Custom domain
+  domain: 'myapp.com',
+  globalCertificateArn: 'arn:aws:acm:us-east-1:...',
+  hostedZoneId: 'Z123456789',
+};
+
+new Astro(new Cdk.App(), 'myapp-web-prod-stack', config);
+```
+
+#### React Router
+
+Deploy [React Router v7](https://reactrouter.com/) framework mode applications with server-side rendering and API routes.
+
+**Best for:** React applications with nested routing, server-side rendering, and modern React Router patterns
+
+**AWS Resources:** Same as [TanStack Start](#tanstack-start)
+
+**Example:**
+```typescript
+import { Cdk, ReactRouter, type ReactRouterProps } from '@thunder-so/thunder';
+
+const config: ReactRouterProps = {
+  env: { account: '123456789012', region: 'us-east-1' },
+  application: 'myapp',
+  service: 'web',
+  environment: 'prod',
+  rootDir: '.',
+  
+  serverProps: {
+    runtime: Cdk.aws_lambda.Runtime.NODEJS_22_X,
+    architecture: Cdk.aws_lambda.Architecture.ARM_64,
+    memorySize: 1024,
+    timeout: 10,
+    keepWarm: true,
+    variables: [{ NODE_ENV: 'production' }],
+  },
+  
+  // Optional: Custom domain
+  domain: 'myapp.com',
+  globalCertificateArn: 'arn:aws:acm:us-east-1:...',
+  hostedZoneId: 'Z123456789',
+};
+
+new ReactRouter(new Cdk.App(), 'myapp-web-prod-stack', config);
+```
+
+#### SvelteKit
+
+**Example:**
+```typescript
+import { Cdk, SvelteKit, type SvelteKitProps } from '@thunder-so/thunder';
+
+const config: SvelteKitProps = {
+  env: { account: '123456789012', region: 'us-east-1' },
+  application: 'myapp',
+  service: 'web',
+  environment: 'prod',
+  rootDir: '.',
+  
+  serverProps: {
+    runtime: Cdk.aws_lambda.Runtime.NODEJS_22_X,
+    architecture: Cdk.aws_lambda.Architecture.ARM_64,
+    memorySize: 1024,
+    timeout: 10,
+    keepWarm: true,
+    variables: [{ NODE_ENV: 'production' }],
+  },
+  
+  // Optional: Custom domain
+  domain: 'myapp.com',
+  globalCertificateArn: 'arn:aws:acm:us-east-1:...',
+  hostedZoneId: 'Z123456789',
+};
+
+new SvelteKit(new Cdk.App(), 'myapp-web-prod-stack', config);
+```
+
+#### Solid Start
+
+**Example:**
+```typescript
+import { Cdk, SolidStart, type SolidStartProps } from '@thunder-so/thunder';
+
+const config: SolidStartProps = {
+  env: { account: '123456789012', region: 'us-east-1' },
+  application: 'myapp',
+  service: 'web',
+  environment: 'prod',
+  rootDir: '.',
+  
+  serverProps: {
+    runtime: Cdk.aws_lambda.Runtime.NODEJS_22_X,
+    architecture: Cdk.aws_lambda.Architecture.ARM_64,
+    memorySize: 1024,
+    timeout: 10,
+    keepWarm: true,
+    variables: [{ NODE_ENV: 'production' }],
+  },
+  
+  // Optional: Custom domain
+  domain: 'myapp.com',
+  globalCertificateArn: 'arn:aws:acm:us-east-1:...',
+  hostedZoneId: 'Z123456789',
+};
+
+new SolidStart(new Cdk.App(), 'myapp-web-prod-stack', config);
+```
+
+#### AnalogJS
+
+**Example:**
+```typescript
+import { Cdk, AnalogJS, type AnalogJSProps } from '@thunder-so/thunder';
+
+const config: AnalogJSProps = {
+  env: { account: '123456789012', region: 'us-east-1' },
+  application: 'myapp',
+  service: 'web',
+  environment: 'prod',
+  rootDir: '.',
+  
+  serverProps: {
+    runtime: Cdk.aws_lambda.Runtime.NODEJS_22_X,
+    architecture: Cdk.aws_lambda.Architecture.ARM_64,
+    memorySize: 1024,
+    timeout: 10,
+    keepWarm: true,
+    variables: [{ NODE_ENV: 'production' }],
+  },
+  
+  // Optional: Custom domain
+  domain: 'myapp.com',
+  globalCertificateArn: 'arn:aws:acm:us-east-1:...',
+  hostedZoneId: 'Z123456789',
+};
+
+new AnalogJS(new Cdk.App(), 'myapp-web-prod-stack', config);
+```
+
+---
+
 ### Template
 
 Deploy [Coolify](https://coolify.io/)-style templates on EC2. Automatically fetches and hydrates Docker Compose templates from the [Coolify templates repository](https://github.com/coollabsio/coolify).
