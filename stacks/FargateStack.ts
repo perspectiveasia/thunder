@@ -1,4 +1,4 @@
-import { Stack } from 'aws-cdk-lib';
+import { Stack, Aws } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { ServiceConstruct } from '../lib/fargate/service';
 import { PipelineConstruct } from '../lib/fargate/pipeline';
@@ -8,12 +8,17 @@ import { getResourceIdPrefix } from '../lib/utils';
 
 export class Fargate extends Stack {
   constructor(scope: Construct, id: string, props: FargateProps) {
+    // Populate default env if not provided
+    props = {
+      ...props,
+      env: {
+        account: props.env?.account || process.env.CDK_DEFAULT_ACCOUNT || Aws.ACCOUNT_ID,
+        region: props.env?.region || process.env.CDK_DEFAULT_REGION || Aws.REGION,
+      },
+    } as FargateProps;
+
     super(scope, id, props);
 
-    // Check mandatory properties
-    if (!props?.env) {
-      throw new Error('Must provide AWS account and region.');
-    }
     if (!props.application || !props.environment || !props.service) {
       throw new Error('Mandatory stack properties missing.');
     }

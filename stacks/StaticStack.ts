@@ -1,4 +1,4 @@
-import { Stack } from 'aws-cdk-lib';
+import { Stack, Aws } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { HostingConstruct } from '../lib/static/hosting';
 import { PipelineConstruct } from '../lib/static/pipeline';
@@ -8,6 +8,15 @@ import { StaticProps } from '../types/StaticProps'
 
 export class Static extends Stack {
   constructor(scope: Construct, id: string, props: StaticProps) {
+    // Populate default env if not provided
+    props = {
+      ...props,
+      env: {
+        account: props.env?.account || process.env.CDK_DEFAULT_ACCOUNT || Aws.ACCOUNT_ID,
+        region: props.env?.region || process.env.CDK_DEFAULT_REGION || Aws.REGION,
+      },
+    } as StaticProps;
+
     super(scope, id, props);
 
     // 1. Hosting (S3 + CloudFront + Route53)

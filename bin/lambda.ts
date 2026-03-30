@@ -1,4 +1,4 @@
-import { App } from "aws-cdk-lib";
+import { App, Aws } from "aws-cdk-lib";
 import { Lambda, type LambdaProps } from '../';
 import { Runtime, Architecture } from 'aws-cdk-lib/aws-lambda';
 
@@ -38,6 +38,10 @@ const mappedArch = mapArch(rawMetadata.functionProps?.architecture as any);
 
 const metadata: LambdaProps = {
   ...rawMetadata,
+  env: {
+    account: rawMetadata.env?.account || process.env.CDK_DEFAULT_ACCOUNT || Aws.ACCOUNT_ID,
+    region: rawMetadata.env?.region || process.env.CDK_DEFAULT_REGION || Aws.REGION,
+  },
   functionProps: {
     ...rawMetadata.functionProps,
     ...(mappedRuntime && { runtime: mappedRuntime }),

@@ -1,4 +1,4 @@
-import { App } from "aws-cdk-lib";
+import { App, Aws } from "aws-cdk-lib";
 import { Nuxt, type NuxtProps } from '../';
 import { Runtime, Architecture } from 'aws-cdk-lib/aws-lambda';
 
@@ -38,6 +38,10 @@ const mappedArch = mapArch(rawMetadata.serverProps?.architecture as any);
 
 const metadata: NuxtProps = {
   ...rawMetadata,
+  env: {
+    account: rawMetadata.env?.account || process.env.CDK_DEFAULT_ACCOUNT || Aws.ACCOUNT_ID,
+    region: rawMetadata.env?.region || process.env.CDK_DEFAULT_REGION || Aws.REGION,
+  },
   serverProps: {
     ...rawMetadata.serverProps,
     ...(mappedRuntime && { runtime: mappedRuntime }),

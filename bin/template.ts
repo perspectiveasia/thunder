@@ -1,4 +1,4 @@
-import { App } from "aws-cdk-lib";
+import { App, Aws } from "aws-cdk-lib";
 import { InstanceType } from "aws-cdk-lib/aws-ec2";
 import { Template, type TemplateProps, fetchTemplate, hydrateTemplate } from '../';
 
@@ -23,8 +23,8 @@ async function main() {
     acmeEmail: rawMetadata.acmeEmail || undefined,
     logRetentionDays: rawMetadata.logRetentionDays || 30,
     env: {
-      account: process.env.CDK_DEFAULT_ACCOUNT!,
-      region: process.env.CDK_DEFAULT_REGION!,
+      account: rawMetadata.env?.account || process.env.CDK_DEFAULT_ACCOUNT || Aws.ACCOUNT_ID,
+      region: rawMetadata.env?.region || process.env.CDK_DEFAULT_REGION || Aws.REGION,
     },
   };
 

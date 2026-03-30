@@ -12,12 +12,12 @@ export interface AppProps extends StackProps {
   /**
    * The AWS environment (account/region) where this stack will be deployed.
    */
-  readonly env: {
+  readonly env?: {
     // The ID of your AWS account on which to deploy the stack.
-    readonly account: string;
+    readonly account?: string;
 
     // The AWS region where to deploy the app.
-    readonly region: string;
+    readonly region?: string;
   };
 
   /**

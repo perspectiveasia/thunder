@@ -1,4 +1,4 @@
-import { Stack } from 'aws-cdk-lib';
+import { Stack, Aws } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { NuxtConstruct } from '../lib/nuxt';
 import { FrameworkPipeline } from '../lib/frameworks/pipeline';
@@ -7,6 +7,15 @@ import { NuxtProps } from '../types/NuxtProps';
 
 export class Nuxt extends Stack {
   constructor(scope: Construct, id: string, props: NuxtProps) {
+    // Populate default env if not provided
+    props = {
+      ...props,
+      env: {
+        account: props.env?.account || process.env.CDK_DEFAULT_ACCOUNT || Aws.ACCOUNT_ID,
+        region: props.env?.region || process.env.CDK_DEFAULT_REGION || Aws.REGION,
+      },
+    } as NuxtProps;
+
     super(scope, id, props);
 
     // 1. Nuxt (SSR Server + Client Origin)

@@ -1,4 +1,4 @@
-import { App } from "aws-cdk-lib";
+import { App, Aws } from "aws-cdk-lib";
 import { Fargate, type FargateProps } from '../';
 import { CpuArchitecture } from 'aws-cdk-lib/aws-ecs';
 
@@ -24,6 +24,10 @@ const mappedArch = mapArch(rawMetadata.serviceProps?.architecture as any);
 
 const metadata: FargateProps = {
   ...rawMetadata,
+  env: {
+    account: rawMetadata.env?.account || process.env.CDK_DEFAULT_ACCOUNT || Aws.ACCOUNT_ID,
+    region: rawMetadata.env?.region || process.env.CDK_DEFAULT_REGION || Aws.REGION,
+  },
   serviceProps: {
     ...rawMetadata.serviceProps,
     ...(mappedArch && { architecture: mappedArch })

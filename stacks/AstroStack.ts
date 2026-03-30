@@ -1,4 +1,4 @@
-import { Stack } from 'aws-cdk-lib';
+import { Stack, Aws } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { AstroConstruct } from '../lib/astro';
 import { FrameworkPipeline } from '../lib/frameworks/pipeline';
@@ -7,6 +7,15 @@ import { NuxtProps as AstroProps } from '../types/NuxtProps';
 
 export class Astro extends Stack {
   constructor(scope: Construct, id: string, props: AstroProps) {
+    // Populate default env if not provided
+    props = {
+      ...props,
+      env: {
+        account: props.env?.account || process.env.CDK_DEFAULT_ACCOUNT || Aws.ACCOUNT_ID,
+        region: props.env?.region || process.env.CDK_DEFAULT_REGION || Aws.REGION,
+      },
+    } as AstroProps;
+
     super(scope, id, props);
 
     // 1. Astro (SSR Server + Client Origin with Edge Fallback)

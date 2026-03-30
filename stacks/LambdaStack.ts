@@ -1,4 +1,4 @@
-import { Stack, RemovalPolicy } from 'aws-cdk-lib';
+import { Stack, RemovalPolicy, Aws } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { Repository } from 'aws-cdk-lib/aws-ecr';
 import { FunctionsConstruct } from '../lib/lambda/functions';
@@ -9,12 +9,17 @@ import { getResourceIdPrefix } from '../lib/utils';
 
 export class Lambda extends Stack {
   constructor(scope: Construct, id: string, props: LambdaProps) {
+    // Populate default env if not provided
+    props = {
+      ...props,
+      env: {
+        account: props.env?.account || process.env.CDK_DEFAULT_ACCOUNT || Aws.ACCOUNT_ID,
+        region: props.env?.region || process.env.CDK_DEFAULT_REGION || Aws.REGION,
+      },
+    } as LambdaProps;
+
     super(scope, id, props);
 
-    // Check mandatory properties
-    if (!props?.env) {
-      throw new Error('Must provide AWS account and region.');
-    }
     if (!props.application || !props.environment || !props.service) {
       throw new Error('Mandatory stack properties missing.');
     }
