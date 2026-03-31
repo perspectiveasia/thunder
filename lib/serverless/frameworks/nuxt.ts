@@ -1,5 +1,5 @@
-import { ServerlessStack } from '../base/ServerlessStack';
-import { ServerlessBaseProps } from '../types/ServerlessProps';
+import { ServerlessStack } from '../../../stacks/ServerlessStack';
+import { ServerlessBaseProps } from '../../../types/ServerlessProps';
 
 export class Nuxt extends ServerlessStack {
   constructor(scope: any, id: string, props: ServerlessBaseProps) {

@@ -7,10 +7,11 @@ export { SolidStart } from './solid-start';
 export { AnalogJS } from './analogjs';
 
 // Base constructs for advanced usage
-export { ServerlessStack } from '../base/ServerlessStack';
-export { ServerlessServer } from '../base/ServerlessServer';
-export { ServerlessClient } from '../base/ServerlessClient';
+export { ServerlessStack } from '../../../stacks/ServerlessStack';
+export { ServerlessServer } from '../server';
+export { ServerlessClient } from '../client';
+export { ServerlessPipeline } from '../pipeline';
 
 // Types and utilities
-export * from '../types/ServerlessProps';
-export * from '../utils/framework-config';
+export * from '../../../types/ServerlessProps';
+export * from '../../../lib/utils/framework-config';

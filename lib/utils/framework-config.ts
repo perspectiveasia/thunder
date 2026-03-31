@@ -1,4 +1,4 @@
-import { FrameworkConfig, ServerlessBaseProps } from '../types/ServerlessProps';
+import { FrameworkConfig, ServerlessBaseProps } from '../../types/ServerlessProps';
 
 export const FRAMEWORK_CONFIGS: Record<string, FrameworkConfig> = {
   nuxt: {

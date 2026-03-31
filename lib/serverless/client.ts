@@ -11,8 +11,8 @@ import { Certificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { AaaaRecord, ARecord, HostedZone, type IHostedZone, RecordTarget } from "aws-cdk-lib/aws-route53";
 import { CloudFrontTarget } from "aws-cdk-lib/aws-route53-targets";
 import { Runtime, Code } from 'aws-cdk-lib/aws-lambda';
-import { ServerlessBaseProps, ServerlessClientProps, ServerlessServerProps } from '../types/ServerlessProps';
-import { getResourceIdPrefix } from '../../utils';
+import { ServerlessBaseProps, ServerlessClientProps, ServerlessServerProps } from '../../types/ServerlessProps';
+import { getResourceIdPrefix } from '../utils';
 
 export interface ServerlessClientConstructProps extends ServerlessBaseProps {
   httpOrigin: HttpOrigin;

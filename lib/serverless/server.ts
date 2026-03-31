@@ -13,8 +13,8 @@ import { OriginProtocolPolicy } from 'aws-cdk-lib/aws-cloudfront';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Rule, Schedule, RuleTargetInput } from 'aws-cdk-lib/aws-events';
 import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
-import { ServerlessBaseProps, ServerlessServerProps } from '../types/ServerlessProps';
-import { getResourceIdPrefix } from '../../utils';
+import { ServerlessBaseProps, ServerlessServerProps } from '../../types/ServerlessProps';
+import { getResourceIdPrefix } from '../utils';
 
 export interface ServerlessServerConstructProps extends ServerlessBaseProps {
   framework: string;
