@@ -56,7 +56,6 @@ export class Fargate extends Stack {
       },
       resources: {
         LoadBalancerDNS: fargate.loadBalancerDnsName,
-        LoadBalancerArn: fargate.loadBalancer.loadBalancerArn,
         ServiceUrl: props.domain ? `https://${props.domain}` : `http://${fargate.loadBalancerDnsName}`,
         Route53Domain: props.domain ? `https://${props.domain}` : undefined,
         CodePipelineName: pipeline?.codePipeline.pipelineName,

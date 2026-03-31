@@ -42,9 +42,7 @@ export class Vpc extends Stack implements IVpcLink {
     new MetadataConstruct(this, 'Metadata', {
       ...props,
       stackType: 'VPC',
-      stackProps: {
-        vpcProps: props.vpcProps,
-      },
+      stackProps: {},
       resources: {
         VpcId: this.vpc.vpcId,
         PublicSubnets: this.vpc.publicSubnets.map(s => s.subnetId),

@@ -356,9 +356,8 @@ export class PipelineConstruct extends Construct {
           "logs:PutLogEvents"
         ],
         resources: [
-          // allow management of the log group and log streams
-          `arn:aws:logs:${props.env.region}:${props.env.account}:log-group:/aws/codebuild/${this.resourceIdPrefix}-*`,
-          `arn:aws:logs:${props.env.region}:${props.env.account}:log-group:/aws/codebuild/${this.resourceIdPrefix}-*:log-stream:*`
+          `arn:aws:logs:${props.env?.region ?? '*'}:${props.env?.account ?? '*'}:log-group:/aws/codebuild/${this.resourceIdPrefix}-*`,
+          `arn:aws:logs:${props.env?.region ?? '*'}:${props.env?.account ?? '*'}:log-group:/aws/codebuild/${this.resourceIdPrefix}-*:log-stream:*`
         ]
       })
     );
