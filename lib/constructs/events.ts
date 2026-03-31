@@ -14,17 +14,16 @@ export interface EventsProps extends AppProps {
 }
 
 export class EventsConstruct extends Construct {
-  private resourceIdPrefix: string;
-
   constructor(scope: Construct, id: string, props: EventsProps) {
     super(scope, id);
 
-    // Set the resource prefix
-    this.resourceIdPrefix = getResourceIdPrefix(props.application, props.service, props.environment);
+    if (!props.eventTarget) return;
+
+    const resourceIdPrefix = getResourceIdPrefix(props.application, props.service, props.environment);
 
     // Create a rule to capture execution events
     const rule = new Rule(this, 'EventsRule', {
-      ruleName: `${this.resourceIdPrefix}-events`,
+      ruleName: `${resourceIdPrefix}-events`,
       eventPattern: {
         source: ['aws.codepipeline'],
         detailType: ['CodePipeline Pipeline Execution State Change'],
@@ -38,7 +37,7 @@ export class EventsConstruct extends Construct {
     if (props.debug) {
       // Create a CloudWatch Log Group for debugging
       const logGroup = new LogGroup(this, 'EventsLogGroup', {
-        logGroupName: `/aws/events/${this.resourceIdPrefix}-pipeline`,
+        logGroupName: `/aws/events/${resourceIdPrefix}-pipeline`,
         removalPolicy: RemovalPolicy.DESTROY,
         retention: RetentionDays.ONE_YEAR
       });
@@ -46,7 +45,7 @@ export class EventsConstruct extends Construct {
       // Create IAM role for log group
       const logGroupEventRole = new Role(this, 'LogGroupEventRole', {
         assumedBy: new ServicePrincipal('events.amazonaws.com'),
-        roleName: `${this.resourceIdPrefix}-LogGroupEventRole`,
+        roleName: `${resourceIdPrefix}-LogGroupEventRole`,
         description: 'Role for EventBridge to write pipeline events to CloudWatch Logs'
       });
 
@@ -61,7 +60,7 @@ export class EventsConstruct extends Construct {
       // Create IAM role for cross-account event bus access
       const crossAccountEventRole = new Role(this, 'CrossAccountEventRole', {
         assumedBy: new ServicePrincipal('events.amazonaws.com'),
-        roleName: `${this.resourceIdPrefix}-CrossAccountEventRole`,
+        roleName: `${resourceIdPrefix}-CrossAccountEventRole`,
         description: 'Role for EventBridge to write pipeline events to external Event Bus',
         inlinePolicies: {
           AllowPutEvents: new PolicyDocument({

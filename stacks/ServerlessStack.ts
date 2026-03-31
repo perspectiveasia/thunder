@@ -27,7 +27,14 @@ export class ServerlessStack extends Stack {
 
     let pipeline: ServerlessPipeline | undefined;
     if (props.accessTokenSecretArn && props.sourceProps) {
-      pipeline = new ServerlessPipeline(this, 'Pipeline', mergedProps);
+      pipeline = new ServerlessPipeline(this, 'Pipeline', {
+        ...mergedProps,
+        lambdaFunction: server.lambdaFunction,
+        staticAssetsBucket: client.staticAssetsBucket,
+        cdn: client.cdn,
+        clientOutputDir: mergedProps.clientProps?.outputDir || frameworkConfig.defaultClientDir,
+        serverCodeDir: mergedProps.serverProps?.codeDir || frameworkConfig.defaultServerDir,
+      });
     }
 
     new MetadataConstruct(this, 'Metadata', {
