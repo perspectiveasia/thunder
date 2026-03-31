@@ -5,6 +5,7 @@ import { getFrameworkConfig, mergePropsWithDefaults } from '../lib/utils/framewo
 import { ServerlessServer } from '../lib/serverless/server';
 import { ServerlessClient } from '../lib/serverless/client';
 import { ServerlessPipeline } from '../lib/serverless/pipeline';
+import { MetadataConstruct } from '../lib/constructs/metadata';
 
 export interface ServerlessStackProps extends ServerlessBaseProps {
   framework: string;
@@ -24,8 +25,28 @@ export class ServerlessStack extends Stack {
       httpOrigin: server.httpOrigin,
     });
 
+    let pipeline: ServerlessPipeline | undefined;
     if (props.accessTokenSecretArn && props.sourceProps) {
-      new ServerlessPipeline(this, 'Pipeline', mergedProps);
+      pipeline = new ServerlessPipeline(this, 'Pipeline', mergedProps);
     }
+
+    new MetadataConstruct(this, 'Metadata', {
+      ...mergedProps,
+      stackType: props.framework,
+      stackProps: {
+        serverProps: props.serverProps,
+        domain: props.domain,
+        globalCertificateArn: props.globalCertificateArn,
+        regionalCertificateArn: props.regionalCertificateArn,
+        hostedZoneId: props.hostedZoneId,
+      },
+      resources: {
+        DistributionId: client.cdn.distributionId,
+        DistributionUrl: `https://${client.cdn.distributionDomainName}`,
+        LambdaFunctionArn: server.lambdaFunction.functionArn,
+        Route53Domain: props.domain ? `https://${props.domain}` : undefined,
+        CodePipelineName: pipeline?.codePipeline.pipelineName,
+      },
+    });
   }
 }
