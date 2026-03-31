@@ -19,10 +19,10 @@ Based on analysis of existing Nuxt and Astro constructs, TanStack Start document
 |-----------|---------------|----------------|----------------|---------|--------------|-------|
 | Nuxt | Vite | Nitro | `.output/public`, `.output/server` | `index.handler` | `aws-lambda` | NITRO_PRESET=aws-lambda |
 | Astro | Vite | @astro-aws/adapter | `dist/client`, `dist/lambda` | `entry.handler` | N/A | Uses Lambda@Edge for fallback |
-| TanStack Start | Vite | Nitro | `.output/public`, `.output/server` | `index.handler` | `aws-lambda` | Streaming enabled by default |
+| TanStack Start | Vite | Nitro | `.output/public`, `.output/server` | `index.handler` | `aws-lambda` | Use `nitro()` from `nitro/vite` or `nitroV2Plugin` from `@tanstack/nitro-v2-vite-plugin` — **must explicitly set `preset: 'aws-lambda'`**, default is `node-server` |
 | Remix/RR v7 | Vite | Custom/Nitro | `build/client`, `build/server` | `index.handler` | `aws-lambda` | Framework mode uses Nitro |
-| SvelteKit | Vite | Adapter-based | `build/client`, `build/server` | Adapter-specific | N/A | Multiple Lambda adapters available |
-| Solid Start | Vite | Nitro | `.output/public`, `.output/server` | `index.handler` | `aws-lambda-streaming` | aws-lambda-streaming preset |
+| SvelteKit | Vite | `@foladayo/sveltekit-adapter-lambda` | `build/` (server), `build/client/` (static) | `index.handler` | N/A | Requires `serveStatic: true` for prerendered pages; `package.json` must be included for ESM support |
+| Solid Start | Vite | Nitro | `.output/public`, `.output/server` | `index.handler` | `aws-lambda` | Standard `aws-lambda` preset; `aws-lambda-streaming` is experimental and requires Lambda streaming invoke support |
 | AnalogJS | Vite | Nitro | `dist/analog/public`, `dist/analog/server` | `index.handler` | `aws-lambda` | Angular-based, uses Nitro |
 
 ## Proposed Architecture
@@ -205,7 +205,7 @@ export const FRAMEWORK_CONFIGS: Record<string, FrameworkConfig> = {
     defaultHandler: 'index.handler',
     defaultServerPaths: ['/api/*'],
     requiresFallbackEdge: false,
-    nitroPreset: 'aws-lambda-streaming',
+    nitroPreset: 'aws-lambda',
   },
   analogjs: {
     name: 'AnalogJS',
@@ -422,11 +422,13 @@ import { Nuxt } from '@thunder-so/thunder';
 ## Framework-Specific Considerations
 
 ### TanStack Start
-- Uses Nitro with `aws-lambda` preset and streaming support (`awsLambda: { streaming: true }`)
-- Build configuration in `vite.config.ts` with nitro plugin
+- Uses Nitro with `aws-lambda` preset — **must be set explicitly**, the default preset is `node-server` which produces a standalone HTTP server (not Lambda-compatible)
+- Two Nitro plugin variants seen in the wild:
+  - `nitro()` from `nitro/vite` — use `nitro({ preset: 'aws-lambda' })`
+  - `nitroV2Plugin()` from `@tanstack/nitro-v2-vite-plugin` — use `nitroV2Plugin({ preset: 'aws-lambda' })`
+- Without the correct preset, build outputs `node-server` format and Lambda returns `Runtime.HandlerNotFound: index.handler is undefined or not exported`
 - Build output: `.output/server` and `.output/public`
-- Handler: `index.handler`
-- Supports AI streaming responses via API Gateway streaming
+- Handler: `index.handler` (ESM named export from `index.mjs`)
 
 ### Remix/React Router v7
 - Framework mode uses Nitro with `aws-lambda` preset
@@ -436,15 +438,17 @@ import { Nuxt } from '@thunder-so/thunder';
 - API routes handled through server-side rendering
 
 ### SvelteKit
-- Uses adapter system, requires Lambda-compatible adapter for serverless
-- Multiple community adapters available for AWS Lambda
-- Build output: `build/server` and `build/client` (adapter-dependent)
-- Handler: Adapter-specific (typically `index.handler`)
-- May need custom adapter configuration for Nitro compatibility
-- **Note:** Does not use Nitro by default, requires adapter selection
+- Use `@foladayo/sveltekit-adapter-lambda` — outputs a flat `build/` directory with `index.handler`
+- **Must set `serveStatic: true`** in adapter config — with `serveStatic: false` (default), the Lambda handler skips prerendered pages entirely, causing 404s for any prerendered route (e.g. `/`)
+- **Must include root `package.json`** in the Lambda ZIP — the build output is ESM (`import` statements) but Node.js requires `"type": "module"` in `package.json` to load it; without it you get `SyntaxError: Cannot use import statement outside a module`
+- Build output: `build/` (Lambda handler + server), `build/client/` (static assets for S3), `build/prerendered/` (prerendered HTML, served by Lambda)
+- Handler: `index.handler`
+- Requires Node.js 22+ runtime
+- Does not use Nitro
 
 ### Solid Start
-- Uses `aws-lambda-streaming` preset for optimal streaming performance
+- Uses `aws-lambda` preset (standard, stable)
+- `aws-lambda-streaming` is experimental and requires Lambda streaming invoke + Function URL or API GW streaming — not compatible with standard HTTP API Gateway
 - Build output: `.output/server` and `.output/public`
 - Handler: `index.handler`
 - Streaming enabled by default for better performance
@@ -488,12 +492,6 @@ All Dockerfiles must:
 # Use AWS Lambda Node.js 24 base image
 FROM public.ecr.aws/lambda/nodejs:24
 
-# Copy package files (from the server directory context)
-COPY package.json ./
-
-# Note: Dependencies are already bundled in the Nitro server build
-# The node_modules from the build are included in the context
-
 # Copy all server files (index.mjs, chunks/, node_modules/)
 COPY . ./
 
@@ -511,12 +509,6 @@ CMD ["index.handler"]
 ```dockerfile
 # Use AWS Lambda Node.js 24 base image
 FROM public.ecr.aws/lambda/nodejs:24
-
-# Copy package files (from the server directory context)
-COPY package.json ./
-
-# Note: Dependencies are already bundled in the server build
-# The node_modules from the build are included in the context
 
 # Copy all server files
 COPY . ./
@@ -536,35 +528,26 @@ CMD ["index.handler"]
 # Use AWS Lambda Node.js 24 base image
 FROM public.ecr.aws/lambda/nodejs:24
 
-# Copy package files (from the server directory context)
-COPY package.json ./
-
-# Note: Dependencies and adapter files are already bundled in the build
-
-# Copy all server files (adapter-dependent)
+# Copy all server files from build/ (index.js + node_modules/)
 COPY . ./
 
-# Set the Lambda handler (adapter-specific)
+# Set the Lambda handler
 CMD ["index.handler"]
 ```
 
 **Build Context:**
-- Requires Lambda-compatible adapter (e.g., `@sveltejs/adapter-node`)
+- Adapter: `@foladayo/sveltekit-adapter-lambda` with `serveStatic: true`
 - Build the app first: `npm run build`
-- Server output: `build/server/` (adapter-dependent)
-- Handler: Adapter-specific, typically `index.handler`
+- Server output: `build/` (flat — `index.js`, `handler.js`, `server/`, `prerendered/`, `node_modules/`)
+- Static assets: `build/client/` (deployed to S3 separately)
+- Handler: `index.handler`
+- CDK sets build context to `codeDir` (`build/`), so `COPY . ./` picks up everything needed
 
 ### Solid Start Dockerfile
 
 ```dockerfile
 # Use AWS Lambda Node.js 24 base image
 FROM public.ecr.aws/lambda/nodejs:24
-
-# Copy package files (from the server directory context)
-COPY package.json ./
-
-# Note: Dependencies are already bundled in the Nitro server build
-# The node_modules from the build are included in the context
 
 # Copy all server files (index.mjs, chunks/, node_modules/)
 COPY . ./
@@ -583,12 +566,6 @@ CMD ["index.handler"]
 ```dockerfile
 # Use AWS Lambda Node.js 24 base image
 FROM public.ecr.aws/lambda/nodejs:24
-
-# Copy package files (from the server directory context)
-COPY package.json ./
-
-# Note: Dependencies are already bundled in the AnalogJS server build
-# The node_modules from the build are included in the context
 
 # Copy all server files (index.mjs, chunks/, node_modules/)
 COPY . ./
@@ -652,34 +629,6 @@ CMD ["entry.handler"]
 - Handler: `entry.handler`
 - Note: Requires Lambda@Edge fallback for SPA routing
 
-### Multi-Stage Build Optimization
-
-For better performance and smaller images, use multi-stage builds:
-
-```dockerfile
-# Build stage
-FROM node:24-alpine AS builder
-
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-
-COPY . .
-RUN npm run build
-
-# Production stage
-FROM public.ecr.aws/lambda/nodejs:24
-
-# Change to the server output directory as build context
-WORKDIR /var/task
-
-# Copy built server from builder stage (includes package.json, index.mjs, chunks/, node_modules/)
-COPY --from=builder /app/.output/server/ ./
-
-# Set the Lambda handler
-CMD ["index.handler"]
-```
-
 **Note:** When using CDK's `DockerImageCode`, the build context is automatically set to the server output directory (e.g., `.output/server/`), so all COPY commands are relative to that directory.
 
 ### Container Build Commands
@@ -695,50 +644,30 @@ docker build -t my-nuxt-app .
 # For other frameworks, adjust accordingly
 ```
 
-**Test Locally with RIE:**
-```bash
-# Run with AWS Lambda Runtime Interface Emulator
-docker run -p 9000:8080 my-app
-
-# Test invocation
-curl -XPOST "http://localhost:9000/2015-03-31/functions/function/invocations" -d '{}'
-```
-
-**Push to ECR:**
-```bash
-# Tag and push to Amazon ECR
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <account>.dkr.ecr.us-east-1.amazonaws.com
-docker tag my-app:latest <account>.dkr.ecr.us-east-1.amazonaws.com/my-app:latest
-docker push <account>.dkr.ecr.us-east-1.amazonaws.com/my-app:latest
-```
-
 ## Framework Configuration Details
 
 ### TanStack Start Configuration
 
-**vite.config.ts:**
-```typescript
-import { defineConfig } from 'vite'
-import { nitro } from 'nitro/vite'
-import viteReact from '@vitejs/plugin-react'
-import tanstackStart from '@tanstack/react-start/plugin/vite'
+Two plugin variants — both require explicit `preset: 'aws-lambda'`:
 
-export default defineConfig({
-  plugins: [
-    tanstackStart(),
-    nitro({
-      awsLambda: { streaming: true },
-      preset: 'aws-lambda',
-    }),
-    viteReact(),
-  ],
-})
+**Option A — `nitro/vite` (standard Nitro):**
+```typescript
+import { nitro } from 'nitro/vite'
+
+nitro({ preset: 'aws-lambda' })
 ```
 
-**Build Process:**
-- `pnpm webapp:build` runs `vite build`
-- Nitro generates `.output/server` and `.output/public`
-- Lambda function uses `index.handler`
+**Option B — `@tanstack/nitro-v2-vite-plugin`:**
+```typescript
+import { nitroV2Plugin } from '@tanstack/nitro-v2-vite-plugin'
+
+nitroV2Plugin({ preset: 'aws-lambda' })
+```
+
+**Key learnings:**
+- Omitting the preset defaults to `node-server` — Lambda will error with `Runtime.HandlerNotFound: index.handler is undefined or not exported` because the output is a plain HTTP server, not a Lambda handler
+- With `aws-lambda` preset, Nitro outputs `index.mjs` with `export { handler }` — matches `index.handler` correctly
+- Build output: `.output/server/` (Lambda) and `.output/public/` (S3/CloudFront)
 
 ### Remix/React Router v7 Configuration
 
@@ -761,18 +690,23 @@ export default {
 
 **svelte.config.js:**
 ```javascript
-import adapter from '@sveltejs/adapter-node'; // or Lambda adapter
+import adapter from '@foladayo/sveltekit-adapter-lambda';
 
 export default {
   kit: {
     adapter: adapter({
-      // adapter-specific options
+      precompress: false, // Lambda can't serve precompressed files correctly
+      serveStatic: true,  // Required: serves prerendered pages from Lambda; without this, prerendered routes return 404
     })
   }
 };
 ```
 
-**Note:** Requires Lambda-compatible adapter. Community adapters available. Does not use Nitro by default.
+**Key learnings:**
+- `serveStatic: false` (default) skips prerendered pages in the Lambda handler — any route with `export const prerender = true` returns 404
+- `serveStatic: true` makes Lambda serve prerendered HTML from `build/prerendered/`; CloudFront's `*.*` behavior still intercepts JS/CSS/images and serves them from S3
+- Root `package.json` must be included alongside the server bundle (`defaultIncludes: ['package.json']` in framework-config) — the build output uses ESM `import` statements and Node.js requires `"type": "module"` to load them
+- Requires Node.js 22+ (`nodejs22.x` Lambda runtime)
 
 ### Solid Start Configuration
 
@@ -780,13 +714,14 @@ export default {
 ```typescript
 export default {
   server: {
-    preset: 'aws-lambda-streaming'
+    preset: 'aws-lambda'
   }
 }
 ```
 
 **Build Process:**
-- Uses `aws-lambda-streaming` preset automatically
+- Uses `aws-lambda` preset (standard HTTP API Gateway compatible)
+- `aws-lambda-streaming` preset exists but is experimental — only use if Lambda streaming invoke is explicitly configured in the CDK construct
 - Output: `.output/server` and `.output/public`
 
 ### AnalogJS Configuration
@@ -880,7 +815,7 @@ export default defineConfig({
 
 ### API Gateway Streaming Support
 
-For frameworks that support streaming (TanStack Start, Solid Start):
+For frameworks that support streaming (TanStack Start):
 
 ```typescript
 // In ServerlessServer.ts

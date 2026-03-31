@@ -83,6 +83,7 @@ export interface FrameworkConfig {
   nitroPreset?: string;
   buildCommand?: string;
   adapterRequired?: boolean;
+  defaultIncludes?: string[];
 }
 
 // Re-export CDK types for convenience

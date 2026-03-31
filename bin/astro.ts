@@ -1,5 +1,5 @@
 import { App, Aws } from "aws-cdk-lib";
-import { Astro, type NuxtProps as AstroProps } from '../';
+import { Astro, type ServerlessBaseProps as AstroProps } from '../';
 import { Runtime, Architecture } from 'aws-cdk-lib/aws-lambda';
 
 const app = new App();

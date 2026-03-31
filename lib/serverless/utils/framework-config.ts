@@ -28,23 +28,15 @@ export const FRAMEWORK_CONFIGS: Record<string, FrameworkConfig> = {
     requiresFallbackEdge: false,
     nitroPreset: 'aws-lambda',
   },
-  'react-router': {
-    name: 'React Router v7',
-    defaultServerDir: 'build/server',
-    defaultClientDir: 'build/client',
-    defaultHandler: 'index.handler',
-    defaultServerPaths: ['/api/*'],
-    requiresFallbackEdge: false,
-    nitroPreset: 'aws-lambda',
-  },
   sveltekit: {
     name: 'SvelteKit',
-    defaultServerDir: 'build/server',
+    defaultServerDir: 'build',
     defaultClientDir: 'build/client',
     defaultHandler: 'index.handler',
     defaultServerPaths: ['/api/*'],
     requiresFallbackEdge: false,
     adapterRequired: true,
+    defaultIncludes: ['package.json'],
   },
   'solid-start': {
     name: 'Solid Start',
@@ -53,7 +45,7 @@ export const FRAMEWORK_CONFIGS: Record<string, FrameworkConfig> = {
     defaultHandler: 'index.handler',
     defaultServerPaths: ['/api/*'],
     requiresFallbackEdge: false,
-    nitroPreset: 'aws-lambda-streaming',
+    nitroPreset: 'aws-lambda',
   },
   analogjs: {
     name: 'AnalogJS',
@@ -84,6 +76,7 @@ export function mergePropsWithDefaults(
       codeDir: config.defaultServerDir,
       handler: config.defaultHandler,
       paths: config.defaultServerPaths,
+      ...(config.defaultIncludes && { include: config.defaultIncludes }),
       ...props.serverProps,
     },
     clientProps: {

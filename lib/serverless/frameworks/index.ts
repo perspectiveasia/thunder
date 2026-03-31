@@ -2,7 +2,6 @@
 export { TanStackStart } from './tanstack-start';
 export { Nuxt } from './nuxt';
 export { Astro } from './astro';
-export { ReactRouter } from './react-router';
 export { SvelteKit } from './sveltekit';
 export { SolidStart } from './solid-start';
 export { AnalogJS } from './analogjs';
