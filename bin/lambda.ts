@@ -1,54 +1,19 @@
-import { App, Aws } from "aws-cdk-lib";
+import { App } from "aws-cdk-lib";
 import { Lambda, type LambdaProps } from '../';
-import { Runtime, Architecture } from 'aws-cdk-lib/aws-lambda';
+import { getMetadata, resolveEnv, mapLambdaRuntime, mapLambdaArch } from './utils';
 
 const app = new App();
-
-const rawMetadata: any = app.node.tryGetContext('metadata');
-
-if (!rawMetadata) {
-  throw new Error('Context metadata missing!');
-}
-
-function mapRuntime(rt?: string | Runtime): Runtime | undefined {
-  if (!rt) return undefined;
-  if ((rt as any)?.name) return rt as Runtime; // Simple check if already a Runtime object
-  const s = String(rt).toLowerCase();
-  if (s === 'provided') return Runtime.PROVIDED_AL2023;
-  if (s.startsWith('nodejs')) {
-    if (s.includes('22')) return Runtime.NODEJS_22_X;
-    if (s.includes('20')) return Runtime.NODEJS_20_X;
-    if (s.includes('18')) return Runtime.NODEJS_18_X;
-  }
-  return Runtime.NODEJS_22_X;
-}
-
-function mapArch(a?: string | Architecture): Architecture | undefined {
-  if (!a) return undefined;
-  if ((a as any)?.name) return a as Architecture; // Simple check if already an Architecture object
-  const s = String(a).toLowerCase();
-  if (s === 'arm' || s === 'arm64') return Architecture.ARM_64;
-  if (s === 'x86' || s === 'x86_64' || s === 'x64') return Architecture.X86_64;
-  console.warn(`Unrecognized architecture string in context: "${a}" — using stack defaults`);
-  return undefined;
-}
-
-const mappedRuntime = mapRuntime(rawMetadata.functionProps?.runtime as any);
-const mappedArch = mapArch(rawMetadata.functionProps?.architecture as any);
+const raw = getMetadata(app);
 
 const metadata: LambdaProps = {
-  ...rawMetadata,
-  env: {
-    account: rawMetadata.env?.account || process.env.CDK_DEFAULT_ACCOUNT || Aws.ACCOUNT_ID,
-    region: rawMetadata.env?.region || process.env.CDK_DEFAULT_REGION || Aws.REGION,
-  },
+  ...raw,
+  env: resolveEnv(raw),
   functionProps: {
-    ...rawMetadata.functionProps,
-    ...(mappedRuntime && { runtime: mappedRuntime }),
-    ...(mappedArch && { architecture: mappedArch })
-  }
+    ...raw.functionProps,
+    ...( mapLambdaRuntime(raw.functionProps?.runtime) && { runtime: mapLambdaRuntime(raw.functionProps?.runtime) }),
+    ...( mapLambdaArch(raw.functionProps?.architecture) && { architecture: mapLambdaArch(raw.functionProps?.architecture) }),
+  },
 };
 
 new Lambda(app, `${metadata.application}-${metadata.service}-${metadata.environment}-stack`, metadata);
-
 app.synth();

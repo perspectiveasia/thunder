@@ -1,39 +1,18 @@
-import { App, Aws } from "aws-cdk-lib";
+import { App } from "aws-cdk-lib";
 import { Fargate, type FargateProps } from '../';
-import { CpuArchitecture } from 'aws-cdk-lib/aws-ecs';
+import { getMetadata, resolveEnv, mapFargateArch } from './utils';
 
 const app = new App();
-
-const rawMetadata: any = app.node.tryGetContext('metadata');
-
-if (!rawMetadata) {
-  throw new Error('Context metadata missing!');
-}
-
-function mapArch(a?: string | CpuArchitecture): CpuArchitecture | undefined {
-  if (!a) return undefined;
-  if ((a as any)?.name) return a as CpuArchitecture;
-  const s = String(a).toLowerCase();
-  if (s === 'arm' || s === 'arm64') return CpuArchitecture.ARM64;
-  if (s === 'x86' || s === 'x86_64' || s === 'x64') return CpuArchitecture.X86_64;
-  console.warn(`Unrecognized architecture string in context: "${a}" — using stack defaults`);
-  return undefined;
-}
-
-const mappedArch = mapArch(rawMetadata.serviceProps?.architecture as any);
+const raw = getMetadata(app);
 
 const metadata: FargateProps = {
-  ...rawMetadata,
-  env: {
-    account: rawMetadata.env?.account || process.env.CDK_DEFAULT_ACCOUNT || Aws.ACCOUNT_ID,
-    region: rawMetadata.env?.region || process.env.CDK_DEFAULT_REGION || Aws.REGION,
-  },
+  ...raw,
+  env: resolveEnv(raw),
   serviceProps: {
-    ...rawMetadata.serviceProps,
-    ...(mappedArch && { architecture: mappedArch })
-  }
+    ...raw.serviceProps,
+    ...( mapFargateArch(raw.serviceProps?.architecture) && { architecture: mapFargateArch(raw.serviceProps?.architecture) }),
+  },
 };
 
 new Fargate(app, `${metadata.application}-${metadata.service}-${metadata.environment}-stack`, metadata);
-
 app.synth();

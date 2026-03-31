@@ -1,11 +1,11 @@
 import { App } from "aws-cdk-lib";
-import { Astro, type AstroProps } from '../';
+import { SvelteKit, type SvelteKitProps } from '../';
 import { getMetadata, resolveEnv, mapLambdaRuntime, mapLambdaArch } from './utils';
 
 const app = new App();
 const raw = getMetadata(app);
 
-const metadata: AstroProps = {
+const metadata: SvelteKitProps = {
   ...raw,
   env: resolveEnv(raw),
   serverProps: {
@@ -15,5 +15,5 @@ const metadata: AstroProps = {
   },
 };
 
-new Astro(app, `${metadata.application}-${metadata.service}-${metadata.environment}-stack`, metadata);
+new SvelteKit(app, `${metadata.application}-${metadata.service}-${metadata.environment}-stack`, metadata);
 app.synth();
