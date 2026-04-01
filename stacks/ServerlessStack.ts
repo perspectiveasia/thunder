@@ -1,4 +1,5 @@
-import { Stack, IRole } from 'aws-cdk-lib';
+import { Stack } from 'aws-cdk-lib';
+import { IRole } from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 import { ServerlessBaseProps } from '../types/ServerlessProps';
 import { getFrameworkConfig, mergePropsWithDefaults } from '../lib/utils/framework-config';

@@ -243,7 +243,7 @@ export class ServerlessClient extends Construct {
      * Response Headers Policy
      * This policy is used to set default security headers for the CloudFront distribution.
      */
-    const responseHeadersPolicy = new ResponseHeadersPolicy(this, "ResponseHeadersPolicy", props.clientProps?.responseHeadersPolicy || {
+    const responseHeadersPolicy = new ResponseHeadersPolicy(this, "ResponseHeadersPolicy", (props.responseHeadersPolicy ?? props.clientProps?.responseHeadersPolicy) || {
       comment: "ResponseHeadersPolicy" + Aws.STACK_NAME + "-" + Aws.REGION,
       securityHeadersBehavior: {
         contentSecurityPolicy: {
@@ -298,16 +298,16 @@ export class ServerlessClient extends Construct {
       defaultTtl: Duration.seconds(0),
       minTtl: Duration.seconds(0),
       maxTtl: Duration.seconds(1),
-      headerBehavior: props.clientProps?.allowHeaders?.length
-        ? CacheHeaderBehavior.allowList(...props.clientProps.allowHeaders)
+      headerBehavior: (props.allowHeaders ?? props.clientProps?.allowHeaders)?.length
+        ? CacheHeaderBehavior.allowList(...(props.allowHeaders ?? props.clientProps!.allowHeaders)!)
         : CacheHeaderBehavior.none(),
-      cookieBehavior: props.clientProps?.allowCookies?.length
-        ? CacheCookieBehavior.allowList(...props.clientProps.allowCookies)
+      cookieBehavior: (props.allowCookies ?? props.clientProps?.allowCookies)?.length
+        ? CacheCookieBehavior.allowList(...(props.allowCookies ?? props.clientProps!.allowCookies)!)
         : CacheCookieBehavior.none(),
-      queryStringBehavior: props.clientProps?.allowQueryParams?.length
-        ? CacheQueryStringBehavior.allowList(...props.clientProps.allowQueryParams)
-        : (props.clientProps?.denyQueryParams?.length
-          ? CacheQueryStringBehavior.denyList(...props.clientProps.denyQueryParams)
+      queryStringBehavior: (props.allowQueryParams ?? props.clientProps?.allowQueryParams)?.length
+        ? CacheQueryStringBehavior.allowList(...(props.allowQueryParams ?? props.clientProps!.allowQueryParams)!)
+        : ((props.denyQueryParams ?? props.clientProps?.denyQueryParams)?.length
+          ? CacheQueryStringBehavior.denyList(...(props.denyQueryParams ?? props.clientProps!.denyQueryParams)!)
           : CacheQueryStringBehavior.none()),
       enableAcceptEncodingGzip: true,
       enableAcceptEncodingBrotli: true,

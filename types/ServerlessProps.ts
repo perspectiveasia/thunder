@@ -3,7 +3,7 @@ import { AppProps } from './AppProps';
 import { CloudFrontProps } from './CloudFrontProps';
 import { PipelineWithRuntimeProps } from './PipelineProps';
 
-export interface ServerlessBaseProps extends AppProps, PipelineWithRuntimeProps {
+export interface ServerlessBaseProps extends AppProps, PipelineWithRuntimeProps, CloudFrontProps {
   // Domain & DNS
   domain?: string;
   hostedZoneId?: string;
@@ -36,7 +36,7 @@ export interface ServerlessServerProps {
   streaming?: boolean;
 }
 
-export interface ServerlessClientProps extends CloudFrontProps {
+export interface ServerlessClientProps {
   outputDir?: string;
   include?: string[];
   exclude?: string[];
