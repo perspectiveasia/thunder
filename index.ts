@@ -5,10 +5,10 @@ export { Fargate } from './stacks/FargateStack';
 export { Ec2 } from './stacks/Ec2Stack';
 export { Template } from './stacks/TemplateStack';
 export { Vpc } from './stacks/VpcStack';
-export { ServerlessStack } from './stacks/ServerlessStack';
 
 // Serverless framework stacks (new unified abstraction)
 export * from './lib/serverless';
+export { ServerlessStack as Serverless } from './stacks/ServerlessStack';
 
 // Types
 export type { StaticProps } from './types/StaticProps';
@@ -18,13 +18,13 @@ export type { Ec2Props } from './types/Ec2Props';
 export type { TemplateProps } from './types/TemplateProps';
 
 // Serverless framework types
-export type { ServerlessBaseProps as NuxtProps } from './types/ServerlessProps';
-export type { ServerlessBaseProps as AstroProps } from './types/ServerlessProps';
-export type { ServerlessBaseProps as TanStackStartProps } from './types/ServerlessProps';
-export type { ServerlessBaseProps as SvelteKitProps } from './types/ServerlessProps';
-export type { ServerlessBaseProps as SolidStartProps } from './types/ServerlessProps';
-export type { ServerlessBaseProps as AnalogJSProps } from './types/ServerlessProps';
-export type { ServerlessBaseProps, ServerlessServerProps, ServerlessClientProps } from './types/ServerlessProps';
+export type { ServerlessProps as NuxtProps } from './types/ServerlessProps';
+export type { ServerlessProps as AstroProps } from './types/ServerlessProps';
+export type { ServerlessProps as TanStackStartProps } from './types/ServerlessProps';
+export type { ServerlessProps as SvelteKitProps } from './types/ServerlessProps';
+export type { ServerlessProps as SolidStartProps } from './types/ServerlessProps';
+export type { ServerlessProps as AnalogJSProps } from './types/ServerlessProps';
+export type { ServerlessProps, ServerlessServerProps, ServerlessClientProps } from './types/ServerlessProps';
 
 // Coolify Template utilities
 export { fetchTemplate } from './lib/template/template/fetch';

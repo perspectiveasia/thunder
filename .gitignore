@@ -57,9 +57,10 @@ out
 # Serverless directories
 .serverless/
 
-# IDEs
+# IDEs and CLIs
 .vscode
 .idea
+.kiro
 
 # npmrc (contains token)
 .npmrc

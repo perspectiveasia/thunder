@@ -1,4 +1,4 @@
-import { FrameworkConfig, ServerlessBaseProps } from '../../types/ServerlessProps';
+import { FrameworkConfig, ServerlessProps } from '../../types/ServerlessProps';
 
 export const FRAMEWORK_CONFIGS: Record<string, FrameworkConfig> = {
   nuxt: {
@@ -67,9 +67,9 @@ export function getFrameworkConfig(framework: string): FrameworkConfig {
 }
 
 export function mergePropsWithDefaults(
-  props: ServerlessBaseProps & { framework: string },
+  props: ServerlessProps & { framework: string },
   config: FrameworkConfig
-): ServerlessBaseProps & { framework: string } {
+): ServerlessProps & { framework: string } {
   return {
     ...props,
     serverProps: {

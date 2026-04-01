@@ -7,7 +7,7 @@
 
 Build full-stack apps on your own AWS.
 
-Thunder is a CDK library and CLI for deploying modern web applications on AWS. One library to rule them all: [Static SPAs](#static), [Lambda Functions](#lambda), [Containers on Fargate](#fargate) and [EC2](#ec2), and [Full-stack Frameworks](#full-stack-frameworks).
+Thunder is a CDK library and CLI for deploying modern web applications on AWS. One library to rule them all: [Static SPAs](#static), [Lambda Functions](#lambda), [Containers on Fargate](#fargate) and [EC2](#ec2), and [Serverless Full-stack Frameworks](#serverless-frameworks).
 
 ## Table of Contents
 
@@ -19,8 +19,7 @@ Thunder is a CDK library and CLI for deploying modern web applications on AWS. O
   - [Lambda](#lambda) - API Gateway + Lambda
   - [Fargate](#fargate) - ECS Fargate + ALB + CloudFront
   - [EC2](#ec2) - EC2 + Docker + Elastic IP
-  - [Nuxt](#nuxt) - Serverless full-stack with Lambda
-  - [Astro](#astro) - Serverless full-stack SSR with Lambda
+  - [Serverless Frameworks](#serverless-frameworks) - Full-stack meta-frameworks with Lambda + S3 + CloudFront
   - [Template](#template) - Coolify-style templates
 - [CLI Commands](#cli-commands)
 - [Documentation](#documentation)
@@ -28,7 +27,7 @@ Thunder is a CDK library and CLI for deploying modern web applications on AWS. O
 
 ## Features
 
-- **Constructs:** One-line deployment for `Static`, `Lambda`, `Fargate`, `EC2`, `Nuxt`, and `Astro`.
+- **Constructs:** One-line deployment for `Static`, `Lambda`, `Fargate`, `EC2`, `Serverless`, and framework-specific constructs.
 - **Thunder CLI (`th`):** Context-aware CLI for initializing, deploying, and managing your infrastructure.
 - **VPC Link Pattern:** Easily connect your compute resources to a shared VPC.
 - **High-Performance Serving:** Pre-configured [CloudFront](https://aws.amazon.com/cloudfront/) distributions with OAC, security headers, and edge optimizations.
@@ -39,7 +38,7 @@ Thunder is a CDK library and CLI for deploying modern web applications on AWS. O
 - **Static:** Vite (React, Vue, Svelte, Solid), Next.js (SSG), Astro (SSG), Gatsby.
 - **Serverless:** Node.js Lambda, Bun, Container-based Lambda.
 - **Containers:** [ECS Fargate](https://aws.amazon.com/fargate/) with ALB, Docker on [EC2](https://aws.amazon.com/ec2/) with Elastic IP.
-- **Full-stack SSR:** [Nuxt.js](https://nuxt.com/), [Astro](https://astro.build/) (SSR), and extensibility for SvelteKit, TanStack Start, AnalogJS.
+- **Full-stack SSR:** [Nuxt](https://nuxt.com/), [Astro](https://astro.build/), [TanStack Start](https://tanstack.com/start), [SvelteKit](https://kit.svelte.dev/), [Solid Start](https://start.solidjs.com/), [AnalogJS](https://analogjs.org/).
 
 ## Quick Start
 
@@ -267,86 +266,13 @@ new Ec2(new Cdk.App(), 'myapp-api-prod-stack', config);
 
 ---
 
-### Full-Stack Frameworks
-
-#### Nuxt
-
-Deploy [Nuxt.js](https://nuxt.com/) SSR applications with hybrid rendering - Lambda for server-side and S3 for static assets.
-
-**Best for:** Vue-based full-stack applications with server-side rendering
-
-**AWS Resources:**
-- [Lambda Function](https://aws.amazon.com/lambda/) - SSR server
-- [S3 Bucket](https://aws.amazon.com/s3/) - Static assets
-- [CloudFront Distribution](https://aws.amazon.com/cloudfront/) - Unified CDN
-- [API Gateway](https://aws.amazon.com/api-gateway/) - HTTP API
-
-**Example:**
-```typescript
-import { Cdk, Nuxt, type NuxtProps } from '@thunder-so/thunder';
-
-const config: NuxtProps = {
-  env: { account: '123456789012', region: 'us-east-1' },
-  application: 'myapp',
-  service: 'web',
-  environment: 'prod',
-  rootDir: '.',
-  
-  serverProps: {
-    runtime: Cdk.aws_lambda.Runtime.NODEJS_22_X,
-    architecture: Cdk.aws_lambda.Architecture.ARM_64,
-    memorySize: 1792,
-    timeout: 10,
-    keepWarm: true,
-  },
-  
-  // Optional: Custom domain
-  domain: 'example.com',
-  globalCertificateArn: 'arn:aws:acm:us-east-1:...',
-  hostedZoneId: 'Z123456789',
-};
-
-new Nuxt(new Cdk.App(), 'myapp-web-prod-stack', config);
-```
-
----
-
-#### Astro
-
-Deploy [Astro](https://astro.build/) SSR applications with the same infrastructure pattern as Nuxt.
-
-**Best for:** Content-focused websites with server-side rendering and islands architecture
-
-**AWS Resources:** Same as [Nuxt](#nuxt)
-
-**Example:**
-```typescript
-import { Cdk, Astro, type NuxtProps as AstroProps } from '@thunder-so/thunder';
-
-const config: AstroProps = {
-  env: { account: '123456789012', region: 'us-east-1' },
-  application: 'myapp',
-  service: 'web',
-  environment: 'prod',
-  rootDir: '.',
-  
-  serverProps: {
-    runtime: Cdk.aws_lambda.Runtime.NODEJS_22_X,
-    architecture: Cdk.aws_lambda.Architecture.ARM_64,
-    memorySize: 1024,
-  },
-};
-
-new Astro(new Cdk.App(), 'myapp-web-prod-stack', config);
-```
-
----
-
 ### Serverless Frameworks
 
 Deploy modern meta-frameworks as serverless applications with unified infrastructure - Lambda for server-side rendering and S3 for static assets, all behind CloudFront.
 
 **Best for:** Full-stack applications with server-side rendering, API routes, and static asset optimization
+
+**Supported Frameworks:** Nuxt, Astro, TanStack Start, SvelteKit, Solid Start, AnalogJS, or any Vite/Nitro-based framework using the generic `Serverless` construct.
 
 **AWS Resources:**
 - [Lambda Function](https://aws.amazon.com/lambda/) - SSR server with container support
@@ -360,7 +286,6 @@ Deploy modern meta-frameworks as serverless applications with unified infrastruc
 - [TanStack Start](https://tanstack.com/start) - Type-safe full-stack React framework
 - [Nuxt](https://nuxt.com/) - Vue-based full-stack framework
 - [Astro](https://astro.build/) - Content-focused web framework with islands architecture
-- [React Router v7](https://reactrouter.com/) - Full-stack React framework with nested routing
 - [SvelteKit](https://kit.svelte.dev/) - Svelte-based full-stack framework
 - [Solid Start](https://start.solidjs.com/) - SolidJS full-stack framework
 - [AnalogJS](https://analogjs.org/) - Angular-based full-stack framework
@@ -458,43 +383,6 @@ const config: AstroProps = {
 };
 
 new Astro(new Cdk.App(), 'myapp-web-prod-stack', config);
-```
-
-#### React Router
-
-Deploy [React Router v7](https://reactrouter.com/) framework mode applications with server-side rendering and API routes.
-
-**Best for:** React applications with nested routing, server-side rendering, and modern React Router patterns
-
-**AWS Resources:** Same as [TanStack Start](#tanstack-start)
-
-**Example:**
-```typescript
-import { Cdk, ReactRouter, type ReactRouterProps } from '@thunder-so/thunder';
-
-const config: ReactRouterProps = {
-  env: { account: '123456789012', region: 'us-east-1' },
-  application: 'myapp',
-  service: 'web',
-  environment: 'prod',
-  rootDir: '.',
-  
-  serverProps: {
-    runtime: Cdk.aws_lambda.Runtime.NODEJS_22_X,
-    architecture: Cdk.aws_lambda.Architecture.ARM_64,
-    memorySize: 1024,
-    timeout: 10,
-    keepWarm: true,
-    variables: [{ NODE_ENV: 'production' }],
-  },
-  
-  // Optional: Custom domain
-  domain: 'myapp.com',
-  globalCertificateArn: 'arn:aws:acm:us-east-1:...',
-  hostedZoneId: 'Z123456789',
-};
-
-new ReactRouter(new Cdk.App(), 'myapp-web-prod-stack', config);
 ```
 
 #### SvelteKit
@@ -653,6 +541,60 @@ main();
 ## Documentation
 
 For detailed documentation on each construct and advanced configurations, see the [Wiki](https://github.com/thunder-so/thunder/wiki).
+
+### Static
+
+| Guide | Description |
+| :--- | :--- |
+| [static-basic.md](./docs/static-basic.md) | Deploy a static site or SPA to S3 + CloudFront |
+| [static-edge-functions.md](./docs/static-edge-functions.md) | Redirects, rewrites, and custom headers via Lambda@Edge |
+| [static-full.md](./docs/static-full.md) | Full `StaticProps` configuration reference |
+
+### Lambda
+
+| Guide | Description |
+| :--- | :--- |
+| [lambda-basic.md](./docs/lambda-basic.md) | Deploy a serverless API with Lambda + API Gateway |
+| [lambda-containers.md](./docs/lambda-containers.md) | Container images and Bun runtime |
+| [lambda-full.md](./docs/lambda-full.md) | Full `LambdaProps` configuration reference |
+
+### Fargate
+
+| Guide | Description |
+| :--- | :--- |
+| [fargate-basic.md](./docs/fargate-basic.md) | Deploy a containerized service on ECS Fargate |
+| [fargate-nixpacks.md](./docs/fargate-nixpacks.md) | Auto-generate Dockerfiles with Nixpacks |
+| [fargate-full.md](./docs/fargate-full.md) | Full `FargateProps` configuration reference |
+
+### Serverless (Full-Stack Frameworks)
+
+| Guide | Description |
+| :--- | :--- |
+| [serverless.md](./docs/serverless.md) | Deploy full-stack meta-frameworks with SSR |
+
+### Framework Guides
+
+**Static Deployment:**
+- [Next.js Static](./docs/frameworks/nextjs-static.md)
+- [Astro Static](./docs/frameworks/astro-static.md)
+
+**Serverless (Lambda + S3 + CloudFront):**
+- [Nuxt](./docs/frameworks/nuxt-serverless.md)
+- [Astro SSR](./docs/frameworks/astro-serverless.md)
+- [TanStack Start](./docs/frameworks/tanstack-start-serverless.md)
+- [SvelteKit](./docs/frameworks/sveltekit-serverless.md)
+- [Solid Start](./docs/frameworks/solidstart-serverless.md)
+- [AnalogJS](./docs/frameworks/analogjs-serverless.md)
+
+**Fargate (Containers):**
+- [Next.js with Dockerfile](./docs/frameworks/nextjs-fargate-dockerfile.md)
+- [Next.js with Nixpacks](./docs/frameworks/nextjs-fargate-nixpacks.md)
+- [Astro](./docs/frameworks/astro-fargate.md)
+- [Nuxt](./docs/frameworks/nuxt-fargate.md)
+- [TanStack Start](./docs/frameworks/tanstack-start-fargate.md)
+- [SvelteKit](./docs/frameworks/sveltekit-fargate.md)
+- [Solid Start](./docs/frameworks/solidstart-fargate.md)
+- [AnalogJS](./docs/frameworks/analogjs-fargate.md)
 
 ## License
 

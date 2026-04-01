@@ -1,14 +1,14 @@
 import { Stack } from 'aws-cdk-lib';
 import { IRole } from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
-import { ServerlessBaseProps } from '../types/ServerlessProps';
+import { ServerlessProps } from '../types/ServerlessProps';
 import { getFrameworkConfig, mergePropsWithDefaults } from '../lib/utils/framework-config';
 import { ServerlessServer } from '../lib/serverless/server';
 import { ServerlessClient } from '../lib/serverless/client';
 import { ServerlessPipeline } from '../lib/serverless/pipeline';
 import { MetadataConstruct } from '../lib/constructs/metadata';
 
-export interface ServerlessStackProps extends ServerlessBaseProps {
+export interface ServerlessStackProps extends ServerlessProps {
   framework: string;
 }
 

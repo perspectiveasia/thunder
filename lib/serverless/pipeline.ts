@@ -8,11 +8,11 @@ import { PolicyStatement, Effect, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { Function as LambdaFunction, Architecture } from 'aws-cdk-lib/aws-lambda';
 import { Repository } from 'aws-cdk-lib/aws-ecr';
 import { Distribution } from 'aws-cdk-lib/aws-cloudfront';
-import { ServerlessBaseProps } from '../../types/ServerlessProps';
+import { ServerlessProps } from '../../types/ServerlessProps';
 import { getResourceIdPrefix } from '../utils';
 import { EventsConstruct } from '../constructs/events';
 
-export interface ServerlessPipelineProps extends ServerlessBaseProps {
+export interface ServerlessPipelineProps extends ServerlessProps {
   lambdaFunction: LambdaFunction;
   staticAssetsBucket: Bucket;
   cdn: Distribution;

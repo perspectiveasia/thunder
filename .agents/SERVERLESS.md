@@ -20,7 +20,6 @@ Based on analysis of existing Nuxt and Astro constructs, TanStack Start document
 | Nuxt | Vite | Nitro | `.output/public`, `.output/server` | `index.handler` | `aws-lambda` | NITRO_PRESET=aws-lambda |
 | Astro | Vite | @astro-aws/adapter | `dist/client`, `dist/lambda` | `entry.handler` | N/A | Uses Lambda@Edge for fallback |
 | TanStack Start | Vite | Nitro | `.output/public`, `.output/server` | `index.handler` | `aws-lambda` | Use `nitro()` from `nitro/vite` or `nitroV2Plugin` from `@tanstack/nitro-v2-vite-plugin` — **must explicitly set `preset: 'aws-lambda'`**, default is `node-server` |
-| Remix/RR v7 | Vite | Custom/Nitro | `build/client`, `build/server` | `index.handler` | `aws-lambda` | Framework mode uses Nitro |
 | SvelteKit | Vite | `@foladayo/sveltekit-adapter-lambda` | `build/` (server), `build/client/` (static) | `index.handler` | N/A | Requires `serveStatic: true` for prerendered pages; `package.json` must be included for ESM support |
 | Solid Start | Vite | Nitro | `.output/public`, `.output/server` | `index.handler` | `aws-lambda` | Standard `aws-lambda` preset; `aws-lambda-streaming` is experimental and requires Lambda streaming invoke support |
 | AnalogJS | Vite | Nitro | `dist/analog/public`, `dist/analog/server` | `index.handler` | `aws-lambda` | Angular-based, uses Nitro |
@@ -42,7 +41,6 @@ thunder/lib/
 │   ├── nuxt.ts                   # Nuxt-specific wrapper
 │   ├── astro.ts                  # Astro-specific wrapper
 │   ├── tanstack-start.ts         # TanStack Start wrapper
-│   ├── remix.ts                  # Remix/React Router v7 wrapper
 │   ├── sveltekit.ts              # SvelteKit wrapper
 │   ├── solid-start.ts            # Solid Start wrapper
 │   └── analogjs.ts               # AnalogJS wrapper
@@ -175,15 +173,6 @@ export const FRAMEWORK_CONFIGS: Record<string, FrameworkConfig> = {
     name: 'TanStack Start',
     defaultServerDir: '.output/server',
     defaultClientDir: '.output/public',
-    defaultHandler: 'index.handler',
-    defaultServerPaths: ['/api/*'],
-    requiresFallbackEdge: false,
-    nitroPreset: 'aws-lambda',
-  },
-  remix: {
-    name: 'Remix',
-    defaultServerDir: 'build/server',
-    defaultClientDir: 'build/client',
     defaultHandler: 'index.handler',
     defaultServerPaths: ['/api/*'],
     requiresFallbackEdge: false,
@@ -430,7 +419,6 @@ import { Nuxt } from '@thunder-so/thunder';
 - Build output: `.output/server` and `.output/public`
 - Handler: `index.handler` (ESM named export from `index.mjs`)
 
-### Remix/React Router v7
 - Framework mode uses Nitro with `aws-lambda` preset
 - Classic mode may need custom adapter configuration
 - Build output: `build/server` and `build/client`
@@ -504,7 +492,6 @@ CMD ["index.handler"]
 - Server output: `.output/server/`
 - Handler: `index.handler`
 
-### Remix/React Router v7 Dockerfile
 
 ```dockerfile
 # Use AWS Lambda Node.js 24 base image
@@ -669,7 +656,6 @@ nitroV2Plugin({ preset: 'aws-lambda' })
 - With `aws-lambda` preset, Nitro outputs `index.mjs` with `export { handler }` — matches `index.handler` correctly
 - Build output: `.output/server/` (Lambda) and `.output/public/` (S3/CloudFront)
 
-### Remix/React Router v7 Configuration
 
 **Framework Mode (Recommended):**
 ```typescript
@@ -800,7 +786,6 @@ export default defineConfig({
 
 ### Step 4: Add Remaining Frameworks
 1. Implement `frameworks/solid-start.ts`
-2. Implement `frameworks/remix.ts`
 3. Implement `frameworks/sveltekit.ts`
 4. Implement `frameworks/analogjs.ts`
 5. Test each framework deployment
@@ -1012,7 +997,6 @@ new Nuxt(app, 'MyApp', {
 ### Docker-based Deployment
 
 ```typescript
-new Remix(app, 'MyApp', {
   application: 'my-app',
   service: 'web',
   environment: 'production',
