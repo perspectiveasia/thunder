@@ -1,4 +1,4 @@
-import { Stack } from 'aws-cdk-lib';
+import { Stack, IRole } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { ServerlessBaseProps } from '../types/ServerlessProps';
 import { getFrameworkConfig, mergePropsWithDefaults } from '../lib/utils/framework-config';
@@ -12,6 +12,7 @@ export interface ServerlessStackProps extends ServerlessBaseProps {
 }
 
 export class ServerlessStack extends Stack {
+  public readonly lambdaRole: IRole;
   constructor(scope: Construct, id: string, props: ServerlessStackProps) {
     super(scope, id, props);
 
@@ -19,6 +20,7 @@ export class ServerlessStack extends Stack {
     const mergedProps = mergePropsWithDefaults(props, frameworkConfig);
 
     const server = new ServerlessServer(this, 'Server', mergedProps);
+    this.lambdaRole = server.lambdaFunction.role!;
 
     const client = new ServerlessClient(this, 'Client', {
       ...mergedProps,
