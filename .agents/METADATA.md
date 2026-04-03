@@ -10,31 +10,52 @@ Thunder uses a state-based approach rather than traditional AWS resource tags fo
 When you deploy a Thunder service, it automatically stores its deployment state in a centralized S3 bucket named `thunder-metadata-<account>-<region>`.
 
 ### Key Structure
-Metadata files are stored with the following hierarchy:
+Files are stored with the following hierarchy:
 ```
 apps/<application>/<environment>/<service>/metadata.json
+apps/<application>/<environment>/<service>/context.json
 ```
 
-### Metadata Content
-The `metadata.json` file contains a standardized set of properties that align with the service's `CfnOutput` names:
+### metadata.json
+Contains stack identity and deployed resource references:
 ```json
 {
-  "id": "myapp-prod-web",
-  "application": "myapp",
-  "service": "web",
-  "environment": "prod",
-  "region": "us-east-1",
-  "created_at": "2026-03-27T12:00:00.000Z",
-  "type": "Nuxt",
-  "DistributionId": "E1234567890",
-  "DistributionUrl": "https://d123.cloudfront.net",
-  "Route53Domain": "https://myapp.com",
-  "CodePipelineName": "myapp-prod-web-pipeline"
+  "stack_type": "Nuxt",
+  "stack_version": "1.2.3",
+  "resources": {
+    "DistributionId": "E1234567890",
+    "DistributionUrl": "https://d123.cloudfront.net",
+    "Route53Domain": "https://myapp.com"
+  },
+  "created_at": "2026-03-27T12:00:00.000Z"
+}
+```
+
+### context.json
+Contains the deployment configuration used to deploy the stack:
+```json
+{
+  "metadata": {
+    "debug": false,
+    "rootDir": ".",
+    "application": "myapp",
+    "service": "web",
+    "environment": "prod",
+    "env": {
+      "account": "123456789012",
+      "region": "us-east-1"
+    },
+    "sourceProps": { ... },
+    "buildProps": { ... },
+    "accessTokenSecretArn": "arn:aws:secretsmanager:...",
+    "eventTarget": "...",
+    "contextDirectory": "..."
+  }
 }
 ```
 
 ### Audit Trail
-Thunder tracks deployment lifecycle with timestamps:
+Thunder tracks deployment lifecycle with timestamps on `metadata.json`:
 - **`created_at`**: Set when the stack is first deployed
 - **`updated_at`**: Added when the stack is updated (only present after updates)
 - **`deleted_at`**: Added when the stack is deleted (file remains in S3 for history)
@@ -45,7 +66,7 @@ Thunder tracks deployment lifecycle with timestamps:
 
 1. **Bucket Resolution**: The tool determines the discovery bucket name based on the current AWS account and region.
 2. **S3 Scanning**: It lists the objects in the bucket under the `apps/` prefix.
-3. **Metadata Parsing**: It reads the `metadata.json` files to discover:
+3. **Metadata Parsing**: It reads the `metadata.json` and `context.json` files to discover:
    - All deployed Thunder apps
    - Their environments/stages
    - Their individual services and associated resource IDs/URLs
@@ -57,6 +78,19 @@ Thunder tracks deployment lifecycle with timestamps:
 - **Location**: `lib/constructs/metadata.ts`
 - **Used by**: All Thunder stacks (Static, Lambda, Fargate, EC2, Nuxt, Astro, VPC, Template)
 
+### MetadataProps
+```typescript
+interface MetadataProps extends AppProps {
+  stackType: string;               // e.g. "Nuxt", "Static", "Fargate"
+  stackProps?: Record<string, any>; // framework-specific config merged into context
+  resources: Record<string, any>;  // deployed resource IDs/URLs
+  sourceProps?: SourceProps;       // CI/CD source config
+  buildProps?: Record<string, any>; // build configuration
+  accessTokenSecretArn?: string;   // GitHub token secret ARN
+  eventTarget?: string;            // CodePipeline event target
+}
+```
+
 ### Bucket Creation
 - Uses `AwsCustomResource` to create the metadata bucket if it doesn't exist
 - Idempotent: Ignores `BucketAlreadyOwnedByYou` and `BucketAlreadyExists` errors
@@ -64,23 +98,15 @@ Thunder tracks deployment lifecycle with timestamps:
 - Never deleted by Thunder (RETAIN policy)
 
 ### Initial Deployment
-- Uses `BucketDeployment` to upload `Source.jsonData` during CDK deployment
-- Sets `created_at` timestamp
+- Uses `BucketDeployment` to upload both `metadata.json` and `context.json` via `Source.jsonData`
+- Sets `created_at` timestamp on `metadata.json`
 - `retainOnDelete: true` to preserve metadata history
 
 ### Update/Delete Tracking
-- Uses `AwsCustomResource` with `onUpdate` and `onDelete` hooks
-- `onUpdate`: Overwrites metadata.json with `updated_at` timestamp
-- `onDelete`: Overwrites metadata.json with `deleted_at` timestamp
+- Uses `AwsCustomResource` with `onUpdate` and `onDelete` hooks on `metadata.json` only
+- `onUpdate`: Overwrites `metadata.json` with `updated_at` timestamp
+- `onDelete`: Overwrites `metadata.json` with `deleted_at` timestamp
 - File remains in S3 after stack deletion
-
-### Metadata Fields
-Standardized field names aligned with `CfnOutput` logical IDs:
-- App identity: `application`, `service`, `environment`, `region`
-- Timestamps: `created_at`, `updated_at`, `deleted_at`
-- Resource IDs/URLs: `DistributionId`, `ServiceUrl`, `LoadBalancerDNS`, etc.
-- Framework-specific: `type`, `TemplateSlug`, etc.
-- Integration: `Route53Domain`, `CodePipelineName`
 
 ## Bucket Lifecycle
 
@@ -99,15 +125,16 @@ AwsCustomResource with onCreate: S3.createBucket
 - installLatestAwsSdk: false (uses Lambda built-in SDK)
 ```
 
-### Metadata Writing
+### File Writing
 ```typescript
 1. BucketDeployment (onCreate)
-   - Writes initial metadata.json with created_at
+   - Writes metadata.json (stack_type, stack_version, resources, created_at)
+   - Writes context.json (deployment configuration)
 
-2. AwsCustomResource (onUpdate)
+2. AwsCustomResource (onUpdate) — metadata.json only
    - Overwrites metadata.json with updated_at
 
-3. AwsCustomResource (onDelete)
+3. AwsCustomResource (onDelete) — metadata.json only
    - Overwrites metadata.json with deleted_at
    - File retained in S3 (retainOnDelete: true)
 ```
@@ -116,34 +143,4 @@ AwsCustomResource with onCreate: S3.createBucket
 
 1. **Timestamp Preservation**: `created_at` is not preserved during stack updates or deletes due to CloudFormation's stateless nature. To preserve it would require a Lambda function with read-merge-write logic.
 
-2. **Concurrent Updates**: If multiple stacks update simultaneously, the last write wins (S3 eventual consistency).
-
-3. **Manual Cleanup**: Deleted stack metadata remains in S3 indefinitely (marked with `deleted_at`). Manual cleanup may be needed for long-term maintenance.
-
-## Future Enhancements
-
-- [ ] Lambda-based metadata writer to preserve `created_at` across updates
-- [ ] Metadata versioning (keep history of all updates)
-- [ ] CLI commands to query and manage metadata
-- [ ] Thunder Console integration for visual discovery
-- [ ] Automatic cleanup of old deleted stack metadata
-
-## SST Comparison
-
-Thunder's metadata system is inspired by SST's discovery mechanism:
-
-### SST Approach
-- Management stack in us-east-1 scans all regions
-- Finds CloudFormation stacks by naming convention
-- Reads metadata from S3 state buckets
-- Console subscribes to stack events for real-time updates
-- Stores additional metadata on sst.dev (hosted)
-
-### Thunder Approach
-- Simpler: No management stack required
-- Direct S3 metadata storage per stack
-- CLI/Console reads directly from S3
-- Self-contained: All metadata in your AWS account
-- No external dependencies
-
-Both approaches enable automatic discovery without manual tagging or complex CloudFormation queries.
+2. **Manual Cleanup**: Deleted stack metadata remains in S3 indefinitely (marked with `deleted_at`). Manual cleanup may be needed for long-term maintenance.

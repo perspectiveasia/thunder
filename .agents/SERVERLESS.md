@@ -1,141 +1,92 @@
-# Plan: Serverless Meta-Framework Abstraction Layer
+# Serverless Meta-Framework Architecture
 
-Based on analysis of existing Nuxt and Astro constructs, TanStack Start documentation, and research on other meta-frameworks, this document outlines a comprehensive plan for creating a unified serverless deployment pattern.
+Thunder provides a unified serverless deployment pattern for all SSR meta-frameworks via a single `ServerlessStack` with framework-specific thin wrappers.
 
-## Key Findings
+---
 
-**Common Pattern Across Frameworks:**
-- All frameworks use **Vite** for client bundling and **Nitro** (or Nitro-based) for server runtime
-- Build outputs follow similar structure:
-  - Client assets: `.output/public` or `dist/client`
-  - Server bundle: `.output/server` or `dist/server`
-- Server bundles expose a standard handler (e.g., `index.handler`) compatible with AWS Lambda
-- All support streaming responses via API Gateway
-- CloudFront routes static assets (S3) and dynamic requests (Lambda via API Gateway)
-
-**Framework-Specific Details:**
-
-| Framework | Client Builder | Server Runtime | Default Output | Handler | Nitro Preset | Notes |
-|-----------|---------------|----------------|----------------|---------|--------------|-------|
-| Nuxt | Vite | Nitro | `.output/public`, `.output/server` | `index.handler` | `aws-lambda` | NITRO_PRESET=aws-lambda |
-| Astro | Vite | @astro-aws/adapter | `dist/client`, `dist/lambda` | `entry.handler` | N/A | Uses Lambda@Edge for fallback |
-| TanStack Start | Vite | Nitro | `.output/public`, `.output/server` | `index.handler` | `aws-lambda` | Use `nitro()` from `nitro/vite` or `nitroV2Plugin` from `@tanstack/nitro-v2-vite-plugin` — **must explicitly set `preset: 'aws-lambda'`**, default is `node-server` |
-| SvelteKit | Vite | `@foladayo/sveltekit-adapter-lambda` | `build/` (server), `build/client/` (static) | `index.handler` | N/A | Requires `serveStatic: true` for prerendered pages; `package.json` must be included for ESM support |
-| Solid Start | Vite | Nitro | `.output/public`, `.output/server` | `index.handler` | `aws-lambda` | Standard `aws-lambda` preset; `aws-lambda-streaming` is experimental and requires Lambda streaming invoke support |
-| AnalogJS | Vite | Nitro | `dist/analog/public`, `dist/analog/server` | `index.handler` | `aws-lambda` | Angular-based, uses Nitro |
-
-## Proposed Architecture
+## Architecture Overview
 
 ```
-thunder/lib/
-├── serverless/                    # New abstraction layer
-│   ├── base/
-│   │   ├── ServerlessServer.ts   # Base Lambda construct
-│   │   ├── ServerlessClient.ts   # Base S3 + CloudFront construct
-│   │   └── ServerlessStack.ts    # Orchestrator
-│   ├── types/
-│   │   └── ServerlessProps.ts    # Unified prop interfaces
-│   └── utils/
-│       └── framework-config.ts   # Framework-specific defaults
-├── frameworks/                    # Framework aliases
-│   ├── nuxt.ts                   # Nuxt-specific wrapper
-│   ├── astro.ts                  # Astro-specific wrapper
-│   ├── tanstack-start.ts         # TanStack Start wrapper
-│   ├── sveltekit.ts              # SvelteKit wrapper
-│   ├── solid-start.ts            # Solid Start wrapper
-│   └── analogjs.ts               # AnalogJS wrapper
+CloudFront Distribution
+├── Default behavior  → API Gateway → Lambda (SSR)
+├── /api/*            → API Gateway → Lambda (SSR, no cache)
+└── *.*               → S3 Bucket (static assets, long-lived cache)
 ```
 
-## Implementation Plan
+All frameworks share the same three constructs:
+- `ServerlessServer` — Lambda + API Gateway
+- `ServerlessClient` — S3 + CloudFront + optional Lambda@Edge fallback
+- `ServerlessPipeline` — CodePipeline CI/CD (optional)
 
-### Phase 1: Create Base Abstraction Layer
+---
 
-#### 1.1 Define Unified Props Interface (`serverless/types/ServerlessProps.ts`)
+## File Structure
+
+```
+lib/serverless/
+├── server.ts              # ServerlessServer construct
+├── client.ts              # ServerlessClient construct
+├── pipeline.ts            # ServerlessPipeline construct
+├── index.ts               # Re-exports all framework stacks + constructs
+└── frameworks/
+    ├── index.ts
+    ├── nuxt.ts
+    ├── astro.ts
+    ├── tanstack-start.ts
+    ├── sveltekit.ts
+    ├── solid-start.ts
+    └── analogjs.ts
+
+stacks/ServerlessStack.ts  # Orchestrator stack
+types/ServerlessProps.ts   # All TypeScript interfaces
+lib/utils/framework-config.ts  # Framework presets registry
+```
+
+---
+
+## Props Interface
 
 ```typescript
-export interface ServerlessBaseProps {
-  // Common deployment props
-  application: string;
-  service: string;
-  environment: string;
-  contextDirectory?: string;
-  rootDir?: string;
-  
-  // Domain & DNS
+// types/ServerlessProps.ts
+
+interface ServerlessProps extends AppProps, PipelineWithRuntimeProps, CloudFrontProps {
   domain?: string;
   hostedZoneId?: string;
-  globalCertificateArn?: string;  // CloudFront (us-east-1)
-  regionalCertificateArn?: string; // API Gateway (region-specific)
-  
-  // Debug & monitoring
-  debug?: boolean;
-  
-  // Framework-specific overrides
+  globalCertificateArn?: string;   // CloudFront cert (must be us-east-1)
+  regionalCertificateArn?: string; // API Gateway cert (regional)
   serverProps?: ServerlessServerProps;
   clientProps?: ServerlessClientProps;
-  buildProps?: ServerlessBuildProps;
 }
 
-export interface ServerlessServerProps {
-  // Build paths
-  codeDir?: string;              // Default: .output/server
-  handler?: string;              // Default: index.handler
-  
-  // Lambda configuration
-  runtime?: Runtime;
-  architecture?: Architecture;
-  memorySize?: number;
-  timeout?: number;
+interface ServerlessServerProps {
+  codeDir?: string;                // Server bundle dir (framework default if omitted)
+  handler?: string;                // Lambda handler (framework default if omitted)
+  runtime?: Runtime;               // Default: NODEJS_20_X
+  architecture?: Architecture;     // Default: ARM_64
+  memorySize?: number;             // Default: 1792
+  timeout?: number;                // Default: 10s
   reservedConcurrency?: number;
   provisionedConcurrency?: number;
-  
-  // Docker support (container mode when specified)
-  dockerFile?: string;
+  dockerFile?: string;             // Enables container mode when set
   dockerBuildArgs?: Record<string, string | number>;
-  
-  // Files & environment
-  include?: string[];
+  include?: string[];              // Files copied into codeDir before deploy
   exclude?: string[];
   variables?: Array<Record<string, string>>;
   secrets?: Array<{ key: string; resource: string }>;
-  
-  // API routing
-  paths?: string[];              // Server-rendered paths (e.g., /api/*)
-  
-  // Features
-  keepWarm?: boolean;
-  tracing?: boolean;
-  streaming?: boolean;           // Enable API Gateway streaming
+  paths?: string[];                // CloudFront paths routed to Lambda (default: ['/api/*'])
+  keepWarm?: boolean;              // EventBridge ping every 5 min
+  tracing?: boolean;               // X-Ray tracing
+  streaming?: boolean;             // (prop exists, not yet wired to API GW streaming)
 }
 
-export interface ServerlessClientProps {
-  // Build paths
-  outputDir?: string;            // Default: .output/public
-  
-  // Asset handling
+interface ServerlessClientProps {
+  outputDir?: string;              // Static assets dir (framework default if omitted)
   include?: string[];
   exclude?: string[];
-  
-  // Edge functions
-  useFallbackEdge?: boolean;     // For Astro-style routing
-  
-  // Cache behavior
-  allowHeaders?: string[];
-  allowCookies?: string[];
-  allowQueryParams?: string[];
-  denyQueryParams?: string[];
-  
-  // Security
-  responseHeadersPolicy?: ResponseHeadersPolicyProps;
+  useFallbackEdge?: boolean;       // Lambda@Edge 404/403 fallback (Astro only)
 }
 
-export interface ServerlessBuildProps {
-  outputDir?: string;
-  include?: string[];
-  exclude?: string[];
-}
-
-export interface FrameworkConfig {
+interface FrameworkConfig {
   name: string;
   defaultServerDir: string;
   defaultClientDir: string;
@@ -143,913 +94,205 @@ export interface FrameworkConfig {
   defaultServerPaths: string[];
   requiresFallbackEdge: boolean;
   nitroPreset?: string;
-  buildCommand?: string;
   adapterRequired?: boolean;
+  defaultIncludes?: string[];      // Files auto-included in Lambda ZIP (e.g. package.json for SvelteKit)
 }
 ```
 
-#### 1.2 Create Framework Configuration Registry (`serverless/utils/framework-config.ts`)
-
-```typescript
-export const FRAMEWORK_CONFIGS: Record<string, FrameworkConfig> = {
-  nuxt: {
-    name: 'Nuxt',
-    defaultServerDir: '.output/server',
-    defaultClientDir: '.output/public',
-    defaultHandler: 'index.handler',
-    defaultServerPaths: ['/api/*'],
-    requiresFallbackEdge: false,
-    nitroPreset: 'aws-lambda',
-  },
-  astro: {
-    name: 'Astro',
-    defaultServerDir: 'dist/lambda',
-    defaultClientDir: 'dist/client',
-    defaultHandler: 'entry.handler',
-    defaultServerPaths: ['/api/*'],
-    requiresFallbackEdge: true,
-  },
-  'tanstack-start': {
-    name: 'TanStack Start',
-    defaultServerDir: '.output/server',
-    defaultClientDir: '.output/public',
-    defaultHandler: 'index.handler',
-    defaultServerPaths: ['/api/*'],
-    requiresFallbackEdge: false,
-    nitroPreset: 'aws-lambda',
-  },
-  sveltekit: {
-    name: 'SvelteKit',
-    defaultServerDir: 'build/server',
-    defaultClientDir: 'build/client',
-    defaultHandler: 'index.handler',
-    defaultServerPaths: ['/api/*'],
-    requiresFallbackEdge: false,
-    adapterRequired: true,
-  },
-  'solid-start': {
-    name: 'Solid Start',
-    defaultServerDir: '.output/server',
-    defaultClientDir: '.output/public',
-    defaultHandler: 'index.handler',
-    defaultServerPaths: ['/api/*'],
-    requiresFallbackEdge: false,
-    nitroPreset: 'aws-lambda',
-  },
-  analogjs: {
-    name: 'AnalogJS',
-    defaultServerDir: 'dist/analog/server',
-    defaultClientDir: 'dist/analog/public',
-    defaultHandler: 'index.handler',
-    defaultServerPaths: ['/api/*'],
-    requiresFallbackEdge: false,
-    nitroPreset: 'aws-lambda',
-  },
-};
-
-export function getFrameworkConfig(framework: string): FrameworkConfig {
-  const config = FRAMEWORK_CONFIGS[framework];
-  if (!config) {
-    throw new Error(`Unknown framework: ${framework}`);
-  }
-  return config;
-}
-
-export function mergePropsWithDefaults(
-  props: ServerlessBaseProps & { framework: string },
-  config: FrameworkConfig
-): ServerlessBaseProps {
-  return {
-    ...props,
-    serverProps: {
-      codeDir: config.defaultServerDir,
-      handler: config.defaultHandler,
-      paths: config.defaultServerPaths,
-      ...props.serverProps,
-    },
-    clientProps: {
-      outputDir: config.defaultClientDir,
-      useFallbackEdge: config.requiresFallbackEdge,
-      ...props.clientProps,
-    },
-  };
-}
-```
-
-#### 1.3 Create Base Server Construct (`serverless/base/ServerlessServer.ts`)
-
-Extract common Lambda logic from `nuxt/server.ts`:
-- Lambda function creation (standard & container)
-- Environment variables & secrets management
-- API Gateway setup with streaming support
-- Keep-warm ping rule
-- Merge framework-specific defaults with user overrides
-
-Key methods:
-- `createLambdaFunction()` - Standard Lambda (ZIP mode)
-- `createContainerLambdaFunction()` - Docker-based Lambda (container mode)
-- `createApiGateway()` - HTTP API with optional streaming
-- `createHttpOrigin()` - CloudFront origin
-- `createPingRule()` - Keep-warm scheduler
-- `addEnvironmentVariables()` - Env var injection
-- `addSecrets()` - Secrets Manager integration
-
-#### Container Mode Support
-
-When `dockerFile` is specified in `ServerlessServerProps`, the construct will automatically use container deployment mode:
-
-1. **Build Docker Image**: Use framework-specific Dockerfile from `docker/` directory
-2. **Push to ECR**: Create private ECR repository and push image
-3. **Create Container Lambda**: Use `DockerImageFunction` instead of `NodejsFunction`
-4. **Environment Variables**: Pass via `environment` prop (not build args)
-5. **Handler**: Use `index.handler` (same as ZIP mode)
-6. **Architecture**: Support both x86_64 and arm64
-
-Container mode benefits:
-- Larger deployment packages (up to 10GB vs 250MB ZIP)
-- Native dependencies support
-- Faster cold starts for large applications
-- Better performance for CPU-intensive workloads
-
-#### 1.4 Create Base Client Construct (`serverless/base/ServerlessClient.ts`)
-
-Extract common CloudFront logic from `nuxt/client.ts` and `astro/client.ts`:
-- S3 bucket creation with OAC (IPv6-compatible)
-- Origin Access Control configuration for secure S3 access
-- CloudFront distribution with multiple origins
-- Cache policies (server vs static assets)
-- Response headers policy
-- Bucket deployment
-- Route53 DNS records
-- Optional Lambda@Edge fallback function
-
-Key methods:
-- `createStaticAssetsBucket()` - S3 with OAC
-- `createOriginAccessControl()` - OAC for IPv6 support
-- `createEdgeLambda()` - Optional fallback (Astro-style)
-- `createCloudFrontDistribution()` - Multi-origin CDN
-- `setupDeployments()` - Asset upload & invalidation
-- `createDnsRecords()` - Route53 A/AAAA records
-
-#### 1.5 Create Orchestrator Stack (`serverless/base/ServerlessStack.ts`)
-
-```typescript
-export class ServerlessStack extends Stack {
-  constructor(scope: Construct, id: string, props: ServerlessBaseProps & { framework: string }) {
-    super(scope, id);
-    
-    const frameworkConfig = getFrameworkConfig(props.framework);
-    const mergedProps = mergePropsWithDefaults(props, frameworkConfig);
-    
-    const server = new ServerlessServer(this, 'Server', mergedProps);
-    const client = new ServerlessClient(this, 'Client', {
-      ...mergedProps,
-      httpOrigin: server.httpOrigin,
-    });
-  }
-}
-```
-
-### Phase 2: Create Framework Aliases
-
-Each framework gets a thin wrapper that sets framework-specific defaults:
-
-#### Example: `frameworks/tanstack-start.ts`
-
-```typescript
-import { ServerlessStack } from '../serverless/base/ServerlessStack';
-import { ServerlessBaseProps } from '../serverless/types/ServerlessProps';
-
-export class TanStackStart extends ServerlessStack {
-  constructor(scope: Construct, id: string, props: ServerlessBaseProps) {
-    super(scope, id, {
-      ...props,
-      framework: 'tanstack-start',
-      serverProps: {
-        streaming: true, // TanStack Start default
-        ...props.serverProps,
-      },
-    });
-  }
-}
-```
-
-#### Example: `frameworks/astro.ts`
-
-```typescript
-export class Astro extends ServerlessStack {
-  constructor(scope: Construct, id: string, props: ServerlessBaseProps) {
-    super(scope, id, {
-      ...props,
-      framework: 'astro',
-      clientProps: {
-        useFallbackEdge: true, // Astro needs Lambda@Edge fallback
-        ...props.clientProps,
-      },
-    });
-  }
-}
-```
-
-#### Example: `frameworks/analogjs.ts`
-
-```typescript
-export class AnalogJS extends ServerlessStack {
-  constructor(scope: Construct, id: string, props: ServerlessBaseProps) {
-    super(scope, id, {
-      ...props,
-      framework: 'analogjs',
-      // AnalogJS-specific defaults already in config
-    });
-  }
-}
-```
-
-### Phase 3: Migration Strategy
-
-#### 3.1 Backward Compatibility
-- Keep existing `nuxt/` and `astro/` constructs as-is initially
-- Mark them as deprecated with migration guide
-- New constructs use `frameworks/nuxt.ts` and `frameworks/astro.ts`
-
-#### 3.2 Gradual Migration
-```typescript
-// Old way (deprecated)
-import { ServerConstruct } from '../lib/nuxt/server';
-import { ClientConstruct } from '../lib/nuxt/client';
-
-// New way
-import { Nuxt } from '@thunder-so/thunder';
-```
-
-### Phase 4: Testing & Validation
-
-#### 4.1 Test Matrix
-- Deploy each framework with default configuration
-- Test custom overrides (memory, timeout, domains)
-- Verify streaming responses work
-- Test keep-warm functionality
-- Validate CloudFront cache behaviors
-
-#### 4.2 Documentation
-- Create migration guide from old constructs
-- Document framework-specific quirks
-- Provide example stacks for each framework
-- Add troubleshooting section
-
-## Key Benefits
-
-1. **DRY Principle**: Single source of truth for serverless deployment logic
-2. **Consistency**: All frameworks deploy with same architecture pattern
-3. **Flexibility**: Framework-specific overrides where needed
-4. **Maintainability**: Bug fixes apply to all frameworks
-5. **Extensibility**: Easy to add new frameworks
-6. **Type Safety**: Unified TypeScript interfaces
-7. **Best Practices**: Streaming, OAC, security headers built-in
-8. **IPv6 Compatible**: OAC implementation supports both IPv4 and IPv6 traffic
-
-## Framework-Specific Considerations
-
-### TanStack Start
-- Uses Nitro with `aws-lambda` preset — **must be set explicitly**, the default preset is `node-server` which produces a standalone HTTP server (not Lambda-compatible)
-- Two Nitro plugin variants seen in the wild:
-  - `nitro()` from `nitro/vite` — use `nitro({ preset: 'aws-lambda' })`
-  - `nitroV2Plugin()` from `@tanstack/nitro-v2-vite-plugin` — use `nitroV2Plugin({ preset: 'aws-lambda' })`
-- Without the correct preset, build outputs `node-server` format and Lambda returns `Runtime.HandlerNotFound: index.handler is undefined or not exported`
-- Build output: `.output/server` and `.output/public`
-- Handler: `index.handler` (ESM named export from `index.mjs`)
-
-- Framework mode uses Nitro with `aws-lambda` preset
-- Classic mode may need custom adapter configuration
-- Build output: `build/server` and `build/client`
-- Handler: `index.handler`
-- API routes handled through server-side rendering
-
-### SvelteKit
-- Use `@foladayo/sveltekit-adapter-lambda` — outputs a flat `build/` directory with `index.handler`
-- **Must set `serveStatic: true`** in adapter config — with `serveStatic: false` (default), the Lambda handler skips prerendered pages entirely, causing 404s for any prerendered route (e.g. `/`)
-- **Must include root `package.json`** in the Lambda ZIP — the build output is ESM (`import` statements) but Node.js requires `"type": "module"` in `package.json` to load it; without it you get `SyntaxError: Cannot use import statement outside a module`
-- Build output: `build/` (Lambda handler + server), `build/client/` (static assets for S3), `build/prerendered/` (prerendered HTML, served by Lambda)
-- Handler: `index.handler`
-- Requires Node.js 22+ runtime
-- Does not use Nitro
-
-### Solid Start
-- Uses `aws-lambda` preset (standard, stable)
-- `aws-lambda-streaming` is experimental and requires Lambda streaming invoke + Function URL or API GW streaming — not compatible with standard HTTP API Gateway
-- Build output: `.output/server` and `.output/public`
-- Handler: `index.handler`
-- Streaming enabled by default for better performance
-
-### AnalogJS
-- Angular-based framework using Nitro for serverless deployment
-- Build output: `dist/analog/server` and `dist/analog/public`
-- Handler: `index.handler` (Lambda handler format is `file.function`)
-- Uses standard `aws-lambda` preset
-- Supports various deployment targets via Nitro presets
-
-### Nuxt
-- Current implementation reference
-- NITRO_PRESET=aws-lambda
-- Build output: `.output/server` and `.output/public`
-- Handler: `index.handler`
-
-### Astro
-- Uses `@astro-aws/adapter` for AWS Lambda deployment
-- Build output: `dist/lambda` (server) and `dist/client` (client)
-- Handler: `entry.handler`
-- Requires Lambda@Edge fallback for SPA-style routing
-- Handles 404 → index.html redirects via edge function
-
-## Container Mode: Dockerfile Specifications
-
-For container deployments, each framework requires a Lambda-specific Dockerfile that packages the built application with the correct Node.js runtime and handler configuration.
-
-### General AWS Lambda Container Requirements
-
-All Dockerfiles must:
-- Use AWS Lambda Node.js base images
-- Copy built server code to `/var/task/`
-- Set the CMD to the handler function
-- Include only production dependencies
-- Be optimized for Lambda cold start performance
-
-### TanStack Start Dockerfile
-
-```dockerfile
-# Use AWS Lambda Node.js 24 base image
-FROM public.ecr.aws/lambda/nodejs:24
-
-# Copy all server files (index.mjs, chunks/, node_modules/)
-COPY . ./
-
-# Set the Lambda handler
-CMD ["index.handler"]
-```
-
-**Build Context:**
-- Build the app first: `npm run build`
-- Server output: `.output/server/`
-- Handler: `index.handler`
-
-
-```dockerfile
-# Use AWS Lambda Node.js 24 base image
-FROM public.ecr.aws/lambda/nodejs:24
-
-# Copy all server files
-COPY . ./
-
-# Set the Lambda handler
-CMD ["index.handler"]
-```
-
-**Build Context:**
-- Build the app first: `npm run build`
-- Server output: `build/server/`
-- Handler: `index.handler`
-
-### SvelteKit Dockerfile
-
-```dockerfile
-# Use AWS Lambda Node.js 24 base image
-FROM public.ecr.aws/lambda/nodejs:24
-
-# Copy all server files from build/ (index.js + node_modules/)
-COPY . ./
-
-# Set the Lambda handler
-CMD ["index.handler"]
-```
-
-**Build Context:**
-- Adapter: `@foladayo/sveltekit-adapter-lambda` with `serveStatic: true`
-- Build the app first: `npm run build`
-- Server output: `build/` (flat — `index.js`, `handler.js`, `server/`, `prerendered/`, `node_modules/`)
-- Static assets: `build/client/` (deployed to S3 separately)
-- Handler: `index.handler`
-- CDK sets build context to `codeDir` (`build/`), so `COPY . ./` picks up everything needed
-
-### Solid Start Dockerfile
-
-```dockerfile
-# Use AWS Lambda Node.js 24 base image
-FROM public.ecr.aws/lambda/nodejs:24
-
-# Copy all server files (index.mjs, chunks/, node_modules/)
-COPY . ./
-
-# Set the Lambda handler
-CMD ["index.handler"]
-```
-
-**Build Context:**
-- Build the app first: `npm run build`
-- Server output: `.output/server/`
-- Handler: `index.handler`
-
-### AnalogJS Dockerfile
-
-```dockerfile
-# Use AWS Lambda Node.js 24 base image
-FROM public.ecr.aws/lambda/nodejs:24
-
-# Copy all server files (index.mjs, chunks/, node_modules/)
-COPY . ./
-
-# Set the Lambda handler
-CMD ["index.handler"]
-```
-
-**Build Context:**
-- Build the app first: `npm run build`
-- Server output: `dist/analog/server/`
-- Handler: `index.handler` (Lambda handler format is `file.function`)
-
-### Nuxt Dockerfile
-
-```dockerfile
-# Use AWS Lambda Node.js 24 base image
-FROM public.ecr.aws/lambda/nodejs:24
-
-# Set Nitro preset environment variable
-ENV NITRO_PRESET=aws-lambda
-
-# Copy package files (from the server directory context)
-COPY package.json ./
-
-# Note: Dependencies are already bundled in the Nitro server build
-# The node_modules from the build are included in the context
-
-# Copy all server files (index.mjs, chunks/, node_modules/)
-COPY . ./
-
-# Set the Lambda handler
-CMD ["index.handler"]
-```
-
-**Build Context:**
-- Build the app first: `npm run build`
-- Server output: `.output/server/`
-- Handler: `index.handler`
-- Environment: `NITRO_PRESET=aws-lambda`
-
-### Astro Dockerfile
-
-```dockerfile
-# Use AWS Lambda Node.js 24 base image
-FROM public.ecr.aws/lambda/nodejs:24
-
-# Copy all server files from dist/lambda/
-# Note: Dependencies are already bundled in entry.mjs by @astro-aws/adapter
-# No package.json needed since all dependencies are bundled
-COPY . ./
-
-# Set the Lambda handler
-CMD ["entry.handler"]
-```
-
-**Build Context:**
-- Build the app first: `npm run build`
-- Server output: `dist/lambda/` (contains `entry.mjs` with bundled dependencies)
-- Client output: `dist/client/`
-- Handler: `entry.handler`
-- Note: Requires Lambda@Edge fallback for SPA routing
-
-**Note:** When using CDK's `DockerImageCode`, the build context is automatically set to the server output directory (e.g., `.output/server/`), so all COPY commands are relative to that directory.
-
-### Container Build Commands
-
-**Build Docker Image:**
-```bash
-# For TanStack Start
-docker build -t my-tanstack-app .
-
-# For Nuxt
-docker build -t my-nuxt-app .
-
-# For other frameworks, adjust accordingly
-```
-
-## Framework Configuration Details
-
-### TanStack Start Configuration
-
-Two plugin variants — both require explicit `preset: 'aws-lambda'`:
-
-**Option A — `nitro/vite` (standard Nitro):**
-```typescript
-import { nitro } from 'nitro/vite'
-
-nitro({ preset: 'aws-lambda' })
-```
-
-**Option B — `@tanstack/nitro-v2-vite-plugin`:**
-```typescript
-import { nitroV2Plugin } from '@tanstack/nitro-v2-vite-plugin'
-
-nitroV2Plugin({ preset: 'aws-lambda' })
-```
-
-**Key learnings:**
-- Omitting the preset defaults to `node-server` — Lambda will error with `Runtime.HandlerNotFound: index.handler is undefined or not exported` because the output is a plain HTTP server, not a Lambda handler
-- With `aws-lambda` preset, Nitro outputs `index.mjs` with `export { handler }` — matches `index.handler` correctly
-- Build output: `.output/server/` (Lambda) and `.output/public/` (S3/CloudFront)
-
-
-**Framework Mode (Recommended):**
-```typescript
-// app.config.ts
-export default {
-  server: {
-    preset: 'aws-lambda'
-  }
-}
-```
-
-**Build Output:**
-- Server: `build/server/index.js`
-- Client: `build/client/`
-- Handler: `index.handler`
-
-### SvelteKit Configuration
-
-**svelte.config.js:**
-```javascript
-import adapter from '@foladayo/sveltekit-adapter-lambda';
-
-export default {
-  kit: {
-    adapter: adapter({
-      precompress: false, // Lambda can't serve precompressed files correctly
-      serveStatic: true,  // Required: serves prerendered pages from Lambda; without this, prerendered routes return 404
-    })
-  }
-};
-```
-
-**Key learnings:**
-- `serveStatic: false` (default) skips prerendered pages in the Lambda handler — any route with `export const prerender = true` returns 404
-- `serveStatic: true` makes Lambda serve prerendered HTML from `build/prerendered/`; CloudFront's `*.*` behavior still intercepts JS/CSS/images and serves them from S3
-- Root `package.json` must be included alongside the server bundle (`defaultIncludes: ['package.json']` in framework-config) — the build output uses ESM `import` statements and Node.js requires `"type": "module"` to load them
-- Requires Node.js 22+ (`nodejs22.x` Lambda runtime)
-
-### Solid Start Configuration
-
-**app.config.ts:**
-```typescript
-export default {
-  server: {
-    preset: 'aws-lambda'
-  }
-}
-```
-
-**Build Process:**
-- Uses `aws-lambda` preset (standard HTTP API Gateway compatible)
-- `aws-lambda-streaming` preset exists but is experimental — only use if Lambda streaming invoke is explicitly configured in the CDK construct
-- Output: `.output/server` and `.output/public`
-
-### AnalogJS Configuration
-
-**vite.config.ts:**
-```typescript
-import { defineConfig } from 'vite'
-import analog from '@analogjs/platform'
-
-export default defineConfig({
-  plugins: [
-    analog({
-      nitro: {
-        preset: 'aws-lambda'
-      }
-    })
-  ]
-})
-```
-
-**Build Output:**
-- Server: `dist/analog/server/index.mjs`
-- Client: `dist/analog/public/`
-- Handler: `index.handler` (Lambda handler format is `file.function`)
-
-### Nuxt Configuration
-
-**Environment:**
-```bash
-NITRO_PRESET=aws-lambda
-```
-
-**Build Output:**
-- Server: `.output/server/index.js`
-- Client: `.output/public/`
-
-### Astro Configuration
-
-**astro.config.mjs:**
-```javascript
-import { defineConfig } from 'astro/config';
-import aws from '@astro-aws/adapter';
-
-export default defineConfig({
-  adapter: aws(),
-  output: 'server'
-});
-```
-
-**Build Output:**
-- Server: `dist/lambda/entry.mjs` (exports `handler`)
-- Client: `dist/client/`
-
-**Note:** Requires Lambda@Edge fallback function for client-side routing.
-
-## Implementation Steps
-
-### Step 1: Create Base Abstraction Layer
-1. Create `serverless/types/ServerlessProps.ts` with unified interfaces
-2. Create `serverless/utils/framework-config.ts` with framework registry
-3. Create `serverless/base/ServerlessServer.ts` by extracting from `nuxt/server.ts`
-4. Create `serverless/base/ServerlessClient.ts` by extracting from `nuxt/client.ts` and `astro/client.ts`
-5. Create `serverless/base/ServerlessStack.ts` as orchestrator
-
-### Step 2: Implement TanStack Start
-1. Create `frameworks/tanstack-start.ts` wrapper
-2. Test deployment with example app
-3. Verify streaming responses
-4. Document configuration
-
-### Step 3: Migrate Existing Frameworks
-1. Create `frameworks/nuxt.ts` using new pattern
-2. Create `frameworks/astro.ts` using new pattern
-3. Test backward compatibility
-4. Update documentation
-
-### Step 4: Add Remaining Frameworks
-1. Implement `frameworks/solid-start.ts`
-3. Implement `frameworks/sveltekit.ts`
-4. Implement `frameworks/analogjs.ts`
-5. Test each framework deployment
-
-### Step 5: Documentation & Examples
-1. Create migration guide
-2. Add framework-specific examples
-3. Document troubleshooting
-4. Update main README
-
-## Technical Details
-
-### API Gateway Streaming Support
-
-For frameworks that support streaming (TanStack Start):
-
-```typescript
-// In ServerlessServer.ts
-private createApiGateway(props: ServerlessBaseProps): HttpApi {
-  const integrationOptions = props.serverProps?.streaming
-    ? { responseTransferMode: ResponseTransferMode.STREAM }
-    : {};
-    
-  // Use LambdaRestApi for streaming, HttpApi for standard
-  if (props.serverProps?.streaming) {
-    return new LambdaRestApi(this, 'API', {
-      handler: this.lambdaFunction,
-      integrationOptions,
-      endpointConfiguration: { types: [EndpointType.REGIONAL] },
-    });
-  }
-  
-  // Standard HttpApi for non-streaming
-  return new HttpApi(this, 'API', {
-    defaultIntegration: new HttpLambdaIntegration('Integration', this.lambdaFunction),
-  });
-}
-```
-
-### CloudFront Behavior Patterns
-
-```typescript
-// Default behavior: Route to Lambda (SSR)
-const defaultBehavior = {
-  origin: httpOrigin,
-  cachePolicy: serverCachePolicy,
-  allowedMethods: AllowedMethods.ALLOW_GET_HEAD,
-  viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-};
-
-// Static assets: Route to S3
-const staticBehavior = {
-  origin: s3Origin,
-  cachePolicy: CachePolicy.CACHING_OPTIMIZED,
-  allowedMethods: AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
-  viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-};
-
-// API routes: Route to Lambda (no caching)
-const apiBehavior = {
-  origin: httpOrigin,
-  cachePolicy: serverCachePolicy,
-  allowedMethods: AllowedMethods.ALLOW_ALL,
-  viewerProtocolPolicy: ViewerProtocolPolicy.HTTPS_ONLY,
-};
-
-// Apply behaviors
-additionalBehaviors['*.*'] = staticBehavior;
-for (const path of serverPaths) {
-  additionalBehaviors[path] = apiBehavior;
-}
-```
-
-### Origin Access Control (OAC) Implementation
-
-**AWS Limitation**: Origin Access Identity (OAI) does not support IPv6 traffic. Origin Access Control (OAC) is required for full IPv6 compatibility and is the recommended modern approach.
-
-```typescript
-// In ServerlessClient.ts
-private createOriginAccessControl(bucket: Bucket): CfnOriginAccessControl {
-  const oac = new CfnOriginAccessControl(this, 'OAC', {
-    originAccessControlConfig: {
-      name: `${resourceIdPrefix}-OAC`,
-      description: `Origin Access Control for ${resourceIdPrefix}`,
-      originAccessControlOriginType: 's3',
-      signingBehavior: 'always',
-      signingProtocol: 'sigv4',
-    },
-  });
-
-  // Create S3 origin with OAC
-  const s3Origin = S3BucketOrigin.withOriginAccessControl(bucket, {
-    originId: `${resourceIdPrefix}-s3origin`,
-    originAccessLevels: [AccessLevel.READ],
-    originAccessControlId: oac.attrId,
-  });
-
-  // Update bucket policy for OAC access
-  bucket.addToResourcePolicy(
-    new PolicyStatement({
-      effect: Effect.ALLOW,
-      actions: ['s3:GetObject'],
-      principals: [new AnyPrincipal()],
-      resources: [`${bucket.bucketArn}/*`],
-      conditions: {
-        StringEquals: {
-          'AWS:SourceArn': `arn:aws:cloudfront::${Aws.ACCOUNT_ID}:origin-access-control/${oac.attrId}`,
-          'aws:SourceAccount': Aws.ACCOUNT_ID,
-        },
-      },
-    })
-  );
-
-  return oac;
-}
-```
-
-**Key Differences from OAI**:
-- Uses `AnyPrincipal()` with specific ARN conditions instead of service principal
-- Supports both IPv4 and IPv6 traffic
-- More flexible permission model
-- Required for modern CloudFront distributions
-
-### Lambda@Edge Fallback (Astro Pattern)
-
-For frameworks requiring SPA-style fallback routing:
-
-```typescript
-// In ServerlessClient.ts
-private createEdgeLambda(): experimental.EdgeFunction {
-  return new experimental.EdgeFunction(this, 'FallbackEdge', {
-    runtime: Runtime.NODEJS_20_X,
-    handler: 'index.handler',
-    code: Code.fromInline(`
-      exports.handler = (event, context, callback) => {
-        const response = event.Records[0].cf.response;
-        const request = event.Records[0].cf.request;
-        const host = event.Records[0].cf.config.distributionDomainName;
-
-        if (response.status == '404') {
-          let redirectUrl;
-          if (request.uri.endsWith('/')) {
-            redirectUrl = 'https://' + host + request.uri + 'index.html';
-          } else if (!request.uri.includes('.')) {
-            redirectUrl = 'https://' + host + request.uri + '/index.html';
-          }
-          callback(null, {
-            status: '302',
-            statusDescription: 'Found',
-            headers: { 'Location': [{ key: 'Location', value: redirectUrl }] }
-          });
-        } else if (response.status == '403') {
-          callback(null, {
-            status: '404',
-            statusDescription: 'Not Found',
-            body: '<h1>404 Not Found</h1>',
-          });
-        } else {
-          callback(null, response);
-        }
-      };
-    `),
-  });
-}
-```
-
-## Usage Examples
-
-### Basic Deployment
-
-```typescript
-import { TanStackStart } from '@thunder-so/thunder';
-
-new TanStackStart(app, 'MyApp', {
-  application: 'my-app',
-  service: 'web',
-  environment: 'production',
-  env: { region: 'us-east-1', account: '123456789' },
-});
-```
-
-### Advanced Configuration
-
-```typescript
-new Nuxt(app, 'MyApp', {
-  application: 'my-app',
-  service: 'web',
-  environment: 'production',
-  domain: 'example.com',
-  hostedZoneId: 'Z1234567890ABC',
-  globalCertificateArn: 'arn:aws:acm:us-east-1:...',
-  regionalCertificateArn: 'arn:aws:acm:us-west-2:...',
-  serverProps: {
-    memorySize: 2048,
-    timeout: 30,
-    keepWarm: true,
-    streaming: true,
-    variables: [{ API_URL: 'https://api.example.com' }],
-    secrets: [{ key: 'DB_PASSWORD', resource: 'arn:aws:secretsmanager:...' }],
-  },
-  clientProps: {
-    allowHeaders: ['Authorization'],
-    allowCookies: ['session'],
-  },
-  env: { region: 'us-west-2', account: '123456789' },
-});
-```
-
-### Docker-based Deployment
-
-```typescript
-  application: 'my-app',
-  service: 'web',
-  environment: 'production',
-  serverProps: {
-    dockerFile: 'Dockerfile',
-    dockerBuildArgs: { NODE_ENV: 'production' },
-    memorySize: 3008,
-  },
-  env: { region: 'us-east-1', account: '123456789' },
-});
-```
-
-### Container Mode Deployment
-
-```typescript
-new TanStackStart(app, 'MyApp', {
-  application: 'my-app',
-  service: 'web',
-  environment: 'production',
-  serverProps: {
-    dockerFile: 'Dockerfile',  // Container mode automatically enabled
-    memorySize: 2048,
-    timeout: 30,
-    // Docker image will be built and pushed automatically
-  },
-  env: { region: 'us-east-1', account: '123456789' },
-});
-```
-
-## Next Steps
-
-1. Create base abstraction layer constructs
-2. Implement TanStack Start as first new framework
-3. Test deployment end-to-end (both ZIP and container modes via dockerFile detection)
-4. Migrate Nuxt and Astro to use new pattern
-5. Add remaining frameworks incrementally
-6. Update documentation and examples
-7. Add container mode testing and validation
-
-## References
-
-- [TanStack Start Hosting Docs](https://tanstack.com/start/latest/docs/framework/react/guide/hosting)
-- [TanStack Start AWS Deployment Example](https://johanneskonings.dev/blog/2025-11-30-tanstack-start-aws-serverless/)
-- [AnalogJS Deployment Docs](https://analogjs.org/docs/features/deployment/overview)
-- [AnalogJS Providers](https://analogjs.org/docs/features/deployment/providers)
-- [Solid Start AWS Deployment](https://docs.solidjs.com/guides/deployment-options/aws-via-sst)
-- [SvelteKit Adapters](https://svelte.dev/docs/kit/adapters)
-- [SvelteKit Node Adapter](https://svelte.dev/docs/kit/adapter-node)
-- [Nitro Deployment Presets](https://nitro.unjs.io/deploy)
-- [AWS Lambda Container Images](https://aws.amazon.com/blogs/aws/new-for-aws-lambda-container-image-support/)
-- [AWS Lambda Node.js Images](https://docs.aws.amazon.com/lambda/latest/dg/nodejs-image.html)
-- Existing Thunder constructs: `thunder/lib/nuxt/` and `thunder/lib/astro/`
+All framework-specific types (`NuxtProps`, `AstroProps`, `TanStackStartProps`, etc.) are type aliases for `ServerlessProps`.
 
 ---
 
-*Content was rephrased for compliance with licensing restrictions*
+## Framework Configs
+
+Defined in `lib/utils/framework-config.ts`:
+
+| Framework | Server Dir | Client Dir | Handler | Edge Fallback | Notes |
+|-----------|-----------|-----------|---------|---------------|-------|
+| `nuxt` | `.output/server` | `.output/public` | `index.handler` | No | `NITRO_PRESET=aws-lambda` |
+| `astro` | `dist/lambda` | `dist/client` | `entry.handler` | Yes | Lambda@Edge for SPA routing |
+| `tanstack-start` | `.output/server` | `.output/public` | `index.handler` | No | Must set `preset: 'aws-lambda'` explicitly |
+| `sveltekit` | `build` | `build/client` | `index.handler` | No | `defaultIncludes: ['package.json']`; requires `serveStatic: true` in adapter |
+| `solid-start` | `.output/server` | `.output/public` | `index.handler` | No | Standard `aws-lambda` preset |
+| `analogjs` | `dist/analog/server` | `dist/analog/public` | `index.handler` | No | Angular + Nitro |
+
+`mergePropsWithDefaults()` merges framework config defaults with user-provided `serverProps`/`clientProps`, with user values taking precedence.
+
+---
+
+## ServerlessServer
+
+**File**: `lib/serverless/server.ts`
+
+Resolves `codeDir` as `contextDirectory + rootDir + serverProps.codeDir`.
+
+**ZIP mode** (default): Creates a `Function` from `Code.fromAsset(codeDir)`.
+
+**Container mode** (when `serverProps.dockerFile` is set):
+- Copies the Dockerfile into `codeDir` via `includeFilesAndDirectories()`
+- Creates a `DockerImageFunction` using `DockerImageCode.fromImageAsset(codeDir)`
+- Passes `NODE_ENV` + any `dockerBuildArgs` as Docker build args
+
+Both modes set `NITRO_PRESET=aws-lambda` and `NODE_OPTIONS=--enable-source-maps` as Lambda env vars.
+
+**API Gateway**: HTTP API v2 with `/{proxy+}` route (GET, HEAD). Optionally creates a custom `DomainName` if `domain` + `regionalCertificateArn` are provided.
+
+**Keep-warm**: EventBridge rule firing every 5 minutes with a fake API GW v2 event payload targeting the Lambda function.
+
+**Provisioned concurrency**: Creates a `Version` + `Alias` (`live`) when `provisionedConcurrency` is set.
+
+**Public properties**:
+- `lambdaFunction: Function`
+- `httpOrigin: HttpOrigin` (points to `<apiId>.execute-api.<region>.amazonaws.com`)
+
+---
+
+## ServerlessClient
+
+**File**: `lib/serverless/client.ts`
+
+**S3 bucket** (`<prefix>-assets`): versioned, SSE-S3, block public access, OAC-based access.
+
+**Origin Access Control (OAC)**: Uses `CfnOriginAccessControl` + `S3BucketOrigin.withOriginAccessControl()`. Bucket policy uses `AnyPrincipal` with `AWS:SourceArn` condition scoped to the OAC ARN. This supports IPv6 (unlike legacy OAI).
+
+**Lambda@Edge fallback** (when `clientProps.useFallbackEdge = true`):
+- Inline Node.js function attached to `ORIGIN_RESPONSE` event
+- On `404`: redirects to `<uri>/index.html` (for SPA routing)
+- On `403`: returns a `404 Not Found`
+- Used by Astro only
+
+**CloudFront distribution**:
+- `defaultBehavior`: routes to `httpOrigin` (Lambda via API GW), TTL 0–1s, security headers policy
+- `*.*` behavior: routes to S3, `CACHING_OPTIMIZED` (long-lived)
+- Per-path behaviors from `serverProps.paths` (default `/api/*`): routes to `httpOrigin`, `ALLOW_ALL` methods
+- HTTP/3, TLS 1.2+, optional access logging (when `debug: true`)
+
+**Cache policy** (server): TTL 0/0/1s. Forwards headers/cookies/query strings only if explicitly listed in `clientProps.allowHeaders` / `allowCookies` / `allowQueryParams` / `denyQueryParams`. Also reads top-level `CloudFrontProps` fields for backward compat.
+
+**Deployments**: `BucketDeployment` from `contextDirectory + rootDir + clientProps.outputDir`. Cache-control: `public, max-age=31536000, immutable`. Invalidates `/**` on deploy.
+
+**DNS**: Route53 A + AAAA alias records pointing to CloudFront (when `domain` + `globalCertificateArn` + `hostedZoneId` are set).
+
+**CfnOutputs**: `DistributionId`, `DistributionUrl`, `Route53Domain` (if domain set).
+
+**Public properties**:
+- `staticAssetsBucket: Bucket`
+- `cdn: Distribution`
+- `originAccessControl: CfnOriginAccessControl`
+
+---
+
+## ServerlessPipeline
+
+**File**: `lib/serverless/pipeline.ts`
+
+Triggered when `accessTokenSecretArn` + `sourceProps` are set on the stack.
+
+**Stages**: Source (GitHub webhook) → Build (CodeBuild) → Deploy (CodeBuild).
+
+**ZIP mode**:
+- Build: install → build → `zip -r function.zip .` from `serverCodeDir`
+- Deploy: `lambda update-function-code --zip-file`, `s3 sync`, CloudFront invalidation
+
+**Container mode** (when `serverProps.dockerFile` is set):
+- Creates an ECR repository (`<prefix>-ecr`, RETAIN on delete)
+- Build: install → build → `docker build -f <dockerFile> <serverCodeDir>` → `docker push`
+- Deploy: `lambda update-function-code --image-uri`, `s3 sync`, CloudFront invalidation
+
+**Architecture**: ARM_64 → `LinuxArmBuildImage.AMAZON_LINUX_2023_STANDARD_3_0`; X86_64 → `LinuxBuildImage.STANDARD_7_0`.
+
+**EventBridge**: `EventsConstruct` is always created, forwarding pipeline state changes to `eventTarget` if set.
+
+**CfnOutput**: `CodePipelineName`.
+
+---
+
+## ServerlessStack (Orchestrator)
+
+**File**: `stacks/ServerlessStack.ts`
+
+```typescript
+export interface ServerlessStackProps extends ServerlessProps {
+  framework: string; // e.g. 'nuxt', 'astro', 'tanstack-start'
+}
+```
+
+1. Calls `getFrameworkConfig(framework)` + `mergePropsWithDefaults()` to apply framework defaults
+2. Creates `ServerlessServer` → exposes `lambdaFunction`, `httpOrigin`
+3. Creates `ServerlessClient` with `httpOrigin` passed in
+4. Optionally creates `ServerlessPipeline` (when `accessTokenSecretArn` + `sourceProps` present)
+5. Creates `MetadataConstruct` with `stackType = framework`, resources = `DistributionId`, `DistributionUrl`, `LambdaFunctionArn`, `Route53Domain`, `CodePipelineName`
+
+---
+
+## Framework Wrappers
+
+Each file in `lib/serverless/frameworks/` is a one-liner that calls `ServerlessStack` with the framework key:
+
+```typescript
+// frameworks/nuxt.ts
+export class Nuxt extends ServerlessStack {
+  constructor(scope, id, props: ServerlessProps) {
+    super(scope, id, { ...props, framework: 'nuxt' });
+  }
+}
+```
+
+All six frameworks follow this exact pattern.
+
+---
+
+## Framework-Specific Build Notes
+
+### TanStack Start
+- Must explicitly set `preset: 'aws-lambda'` — the default is `node-server` (not Lambda-compatible)
+- Two plugin variants: `nitro({ preset: 'aws-lambda' })` from `nitro/vite`, or `nitroV2Plugin({ preset: 'aws-lambda' })` from `@tanstack/nitro-v2-vite-plugin`
+- Without the preset, Lambda errors with `Runtime.HandlerNotFound: index.handler is undefined or not exported`
+
+### SvelteKit
+- Use `@foladayo/sveltekit-adapter-lambda` with `serveStatic: true` — without it, prerendered routes return 404
+- Root `package.json` must be included in the Lambda ZIP (`defaultIncludes: ['package.json']` in framework config) — the ESM build requires `"type": "module"` to load
+- Requires Node.js 22+ runtime
+
+### Astro
+- Uses `@astro-aws/adapter` (`output: 'server'`)
+- Lambda@Edge fallback is required for SPA-style client routing (`requiresFallbackEdge: true`)
+- Handler is `entry.handler` (not `index.handler`)
+
+### Nuxt
+- Set `NITRO_PRESET=aws-lambda` (also injected automatically by the construct)
+
+### Solid Start
+- Use standard `aws-lambda` preset; `aws-lambda-streaming` is experimental and not compatible with standard HTTP API Gateway
+
+### AnalogJS
+```typescript
+// vite.config.ts
+analog({ nitro: { preset: 'aws-lambda' } })
+```
+
+---
+
+## Container Mode Dockerfiles
+
+When `serverProps.dockerFile` is set, the construct copies the Dockerfile into `codeDir` and builds a container Lambda. All frameworks use the same pattern:
+
+```dockerfile
+FROM public.ecr.aws/lambda/nodejs:24
+COPY . ./
+CMD ["index.handler"]   # or "entry.handler" for Astro
+```
+
+The build context is `codeDir` (the server output directory), so `COPY . ./` picks up the entire server bundle.
+
+---
+
+## CloudFront Routing Summary
+
+| Path pattern | Origin | Cache | Methods |
+|---|---|---|---|
+| `*.*` (static assets) | S3 via OAC | `CACHING_OPTIMIZED` (1 year) | GET, HEAD, OPTIONS |
+| `/api/*` (or custom `paths`) | API Gateway → Lambda | TTL 0–1s | ALL |
+| `/**` (default, SSR) | API Gateway → Lambda | TTL 0–1s | GET, HEAD |
+
+Lambda@Edge (Astro only) runs on `ORIGIN_RESPONSE` for the default behavior.

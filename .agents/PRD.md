@@ -1,10 +1,10 @@
 # Thunder - CDK Library for AWS Deployments
 
-## Executive Summary
+## Summary
 
 Thunder (`@thunder-so/thunder`) is an AWS CDK library for deploying modern web applications. It provides opinionated, production-ready infrastructure patterns for one-line deployment of common web application architectures.
 
-**One library to rule them all**: Static SPAs, Lambda Functions, Containers (Fargate/EC2), and Full-stack Frameworks (Nuxt/Astro).
+**One library to rule them all**: Static SPAs, Lambda Functions, Containers (Fargate/EC2), and Full-stack Frameworks.
 
 ---
 
@@ -23,9 +23,9 @@ Thunder provides high-level abstractions over AWS CDK, enabling developers to de
 | `Fargate` | ECS Fargate + ALB for containers | Long-running containers, microservices | **DONE** |
 | `EC2` | EC2 instance with Docker + Elastic IP | Single containers, dev environments | **DONE** |
 | `Template` | Coolify One-Click Service Template on EC2 | Pre-built apps (n8n, Plausible, etc.) | **DONE** |
-| `Nuxt` | Full-stack Nuxt.js (Lambda + S3 + CloudFront) | SSR Nuxt applications | **DONE** |
-| `Astro` | Full-stack Astro SSR (with Edge fallback) | SSR Astro applications | **DONE** |
-| `VPC` | Shared VPC with public/private subnets | Shared networking infrastructure | **DONE** |
+| `Serverless` | Unified full-stack serverless (Lambda + S3 + CloudFront) | SSR meta-frameworks | **DONE** |
+| `Nuxt` / `Astro` / `TanStackStart` / `SvelteKit` / `SolidStart` / `AnalogJS` | Framework-specific wrappers over `Serverless` | SSR applications per framework | **DONE** |
+| `Vpc` | Shared VPC with public/private subnets | Shared networking infrastructure | **DONE** |
 
 ---
 
@@ -117,41 +117,35 @@ Thunder provides high-level abstractions over AWS CDK, enabling developers to de
 - `TemplateFetcher` (fetches from GitHub)
 - `TemplateHydrator` (variable substitution)
 
-### 6. Nuxt Stack
-**Purpose**: Full-stack Nuxt.js deployment
-**Resources**: Lambda (SSR) + S3 (Assets) + CloudFront (Dual Origin) + API Gateway
+### 6. Serverless Stack (Unified Full-Stack)
+**Purpose**: Full-stack SSR deployment for meta-frameworks
+**Resources**: Lambda (SSR) + S3 (static assets) + CloudFront (dual origin) + API Gateway
 **Key Features**:
-- Nitro preset optimized for AWS Lambda
-- Static assets served from S3
-- SSR via Lambda function
-- API routes support
-- Unified CloudFront distribution
+- Single unified stack for all SSR meta-frameworks
+- Framework-specific configs via `FRAMEWORK_CONFIGS` (server dir, client dir, handler, nitro preset)
+- Optional Lambda@Edge fallback for 404/403 (Astro only, `requiresFallbackEdge: true`)
+- CI/CD pipeline support
+- All framework-specific exports (`Nuxt`, `Astro`, `TanStackStart`, `SvelteKit`, `SolidStart`, `AnalogJS`) are thin wrappers over `ServerlessStack`
 
-**Entry Point**: `bin/nuxt.ts`
-**Stack File**: `stacks/NuxtStack.ts`
+**Entry Points**: `bin/nuxt.ts`, `bin/astro.ts`, `bin/tanstack-start.ts`, `bin/sveltekit.ts`, `bin/solid-start.ts`, `bin/analogjs.ts`
+**Stack File**: `stacks/ServerlessStack.ts`
 **Constructs**:
-- `NuxtConstruct` (SSR server + client)
-- `ServerConstruct` (Lambda SSR)
-- `ClientConstruct` (S3 + CloudFront)
-- `FrameworkPipeline` (CI/CD)
+- `ServerlessServer` (`lib/serverless/server.ts`) — Lambda + API Gateway
+- `ServerlessClient` (`lib/serverless/client.ts`) — S3 + CloudFront
+- `ServerlessPipeline` (`lib/serverless/pipeline.ts`) — CodePipeline CI/CD
+- `MetadataConstruct` — deployment state tracking
 
-### 7. Astro Stack
-**Purpose**: Full-stack Astro SSR deployment
-**Resources**: Lambda (SSR) + S3 + CloudFront + Edge Function fallback
-**Key Features**:
-- Same architecture as Nuxt (Lambda + S3 + CloudFront)
-- Lambda@Edge fallback for 404/403 handling
-- Edge-optimized for global distribution
-- Astro-specific optimizations
+**Framework Configs** (`lib/utils/framework-config.ts`):
+| Framework | Server Dir | Client Dir | Handler | Edge Fallback |
+|-----------|-----------|-----------|---------|---------------|
+| `nuxt` | `.output/server` | `.output/public` | `index.handler` | No |
+| `astro` | `dist/lambda` | `dist/client` | `entry.handler` | Yes |
+| `tanstack-start` | `.output/server` | `.output/public` | `index.handler` | No |
+| `sveltekit` | `build` | `build/client` | `index.handler` | No |
+| `solid-start` | `.output/server` | `.output/public` | `index.handler` | No |
+| `analogjs` | `dist/analog/server` | `dist/analog/public` | `index.handler` | No |
 
-**Entry Point**: `bin/astro.ts`
-**Stack File**: `stacks/AstroStack.ts`
-**Constructs**:
-- `AstroConstruct` (SSR server + client)
-- `ClientConstruct` (S3 + CloudFront + Edge fallback)
-- `FrameworkPipeline` (CI/CD)
-
-### 8. VPC Stack
+### 7. VPC Stack
 **Purpose**: Shared VPC infrastructure
 **Resources**: VPC with public/private subnets, NAT gateways
 **Key Features**:
@@ -160,10 +154,9 @@ Thunder provides high-level abstractions over AWS CDK, enabling developers to de
 - Configurable CIDR, AZs, NAT gateways
 - Can be linked to other stacks
 
-**Entry Point**: `bin/vpc.ts`
 **Stack File**: `stacks/VpcStack.ts`
 **Constructs**:
-- `VPC` (shared VPC construct)
+- `VPC` (`lib/constructs/vpc.ts`)
 
 ---
 
@@ -181,22 +174,20 @@ Thunder provides high-level abstractions over AWS CDK, enabling developers to de
 │   ├── template.ts               # Coolify template deployment
 │   ├── nuxt.ts                   # Nuxt deployment
 │   ├── astro.ts                  # Astro deployment
-│   └── vpc.ts                    # VPC deployment
+│   ├── tanstack-start.ts         # TanStack Start deployment
+│   ├── sveltekit.ts              # SvelteKit deployment
+│   ├── solid-start.ts            # Solid Start deployment
+│   ├── analogjs.ts               # AnalogJS deployment
+│   └── utils.ts                  # Shared bin utilities
 │
 ├── cli/                          # Thunder CLI
-│   ├── th.mjs                    # Main CLI entry
-│   ├── th-init.mjs               # Init command
-│   ├── th-deploy.mjs             # Deploy command
-│   └── th-destroy.mjs            # Destroy command
+│   └── th.mjs                    # Main CLI entry
 │
 ├── lib/                          # CDK constructs
-│   ├── astro/                    # Astro framework support
-│   │   ├── index.ts              # AstroConstruct
-│   │   └── client.ts             # Astro client (S3 + CloudFront + Edge)
-│   │
 │   ├── constructs/               # Shared constructs
 │   │   ├── vpc.ts                # VPC construct
-│   │   └── discovery.ts          # SST-style metadata discovery
+│   │   ├── metadata.ts           # SST-style metadata discovery
+│   │   └── events.ts             # EventBridge pipeline events
 │   │
 │   ├── ec2/                      # EC2 implementation
 │   │   ├── compute.ts            # EC2 compute
@@ -210,17 +201,23 @@ Thunder provides high-level abstractions over AWS CDK, enabling developers to de
 │   │   ├── service.ts            # ECS Fargate service
 │   │   └── pipeline.ts           # Fargate pipeline
 │   │
-│   ├── frameworks/               # Framework pipeline
-│   │   └── pipeline.ts           # Shared framework CI/CD
-│   │
 │   ├── lambda/                   # Lambda implementation
 │   │   ├── functions.ts          # Lambda + API Gateway
 │   │   └── pipeline.ts           # Lambda pipeline
 │   │
-│   ├── nuxt/                     # Nuxt implementation
-│   │   ├── index.ts              # NuxtConstruct
-│   │   ├── server.ts             # Nuxt server (Lambda)
-│   │   └── client.ts             # Nuxt client (S3 + CloudFront)
+│   ├── serverless/               # Unified SSR framework implementation
+│   │   ├── index.ts              # Re-exports all framework stacks + constructs
+│   │   ├── server.ts             # ServerlessServer (Lambda + API Gateway)
+│   │   ├── client.ts             # ServerlessClient (S3 + CloudFront)
+│   │   ├── pipeline.ts           # ServerlessPipeline (CodePipeline CI/CD)
+│   │   └── frameworks/           # Framework-specific thin wrappers
+│   │       ├── index.ts          # Exports all framework stacks
+│   │       ├── nuxt.ts           # Nuxt → ServerlessStack
+│   │       ├── astro.ts          # Astro → ServerlessStack
+│   │       ├── tanstack-start.ts # TanStack Start → ServerlessStack
+│   │       ├── sveltekit.ts      # SvelteKit → ServerlessStack
+│   │       ├── solid-start.ts    # Solid Start → ServerlessStack
+│   │       └── analogjs.ts       # AnalogJS → ServerlessStack
 │   │
 │   ├── static/                   # Static implementation
 │   │   ├── hosting.ts            # S3 + CloudFront + Route53
@@ -242,7 +239,8 @@ Thunder provides high-level abstractions over AWS CDK, enabling developers to de
 │       ├── naming.ts             # Resource naming
 │       ├── paths.ts              # Path sanitization
 │       ├── nixpacks.ts           # Nixpacks integration
-│       └── vpc-link.ts           # VPC linking
+│       ├── vpc.ts                # VPC linking
+│       └── framework-config.ts   # Framework presets + mergePropsWithDefaults
 │
 ├── stacks/                       # Stack definitions
 │   ├── StaticStack.ts
@@ -250,8 +248,7 @@ Thunder provides high-level abstractions over AWS CDK, enabling developers to de
 │   ├── FargateStack.ts
 │   ├── Ec2Stack.ts
 │   ├── TemplateStack.ts
-│   ├── NuxtStack.ts
-│   ├── AstroStack.ts
+│   ├── ServerlessStack.ts        # Unified SSR stack (replaces NuxtStack/AstroStack)
 │   └── VpcStack.ts
 │
 ├── types/                        # TypeScript interfaces
@@ -261,15 +258,21 @@ Thunder provides high-level abstractions over AWS CDK, enabling developers to de
 │   ├── FargateProps.ts
 │   ├── Ec2Props.ts
 │   ├── TemplateProps.ts
-│   ├── NuxtProps.ts
+│   ├── ServerlessProps.ts        # Unified SSR props (aliased as NuxtProps, AstroProps, etc.)
 │   ├── VpcProps.ts
 │   ├── CloudFrontProps.ts
 │   └── PipelineProps.ts
 │
+├── scripts/                      # Build/install scripts
+│   └── postinstall.js
+│
+├── runtime/                      # Lambda runtime assets
+│   └── Dockerfile
+│
 ├── .agents/                      # Documentation
 │   ├── PRD.md                    # This file
 │   ├── CLI.md                    # CLI scope
-│   ├── SKILLS.md                 # Claude skills plan
+│   ├── SERVERLESS.md             # Serverless/SSR architecture details
 │   └── METADATA.md               # Discovery mechanism
 │
 ├── index.ts                      # Main exports
@@ -348,70 +351,6 @@ Bun runtime for Lambda:
 
 ---
 
-## Thunder CLI
-
-**Location**: `cli/th.mjs`
-
-The Thunder CLI provides context-aware infrastructure management:
-
-### Commands
-
-| Command | Description | Status |
-|---------|-------------|--------|
-| `th init` | Scaffold new project/service | [ ] **TODO** |
-| `th deploy` | Deploy stacks to AWS | [ ] **TODO** |
-| `th destroy` | Remove resources from AWS | [ ] **TODO** |
-
-### CLI Architecture
-- **Runtime**: Node.js
-- **Core Libraries**: `commander`, `inquirer`, `chalk`, `ora`, `shelljs`
-- **Context Resolution**: Reads `bin/*.ts` files
-- **Environment**: Injects CDK context via environment variables
-
-### Context Resolution
-1. CLI scans `bin/` directory for stack entry points
-2. Executes via `ts-node` or `tsx`
-3. Injects context: app, env, service, account, region
-4. Delegates to CDK for actual deployment
-
-**Status**: Basic CLI structure done, full implementation pending
-
----
-
-## CLI Mandates
-
-1. **Context-Awareness**: [x] **DONE** - Auto-detects environment from repository
-2. **Zero-Config Defaults**: [x] **DONE** - Sensible defaults for AWS regions, accounts, resource sizing
-3. **Local Dev Parity**: [ ] **TODO** - Local development loop (future scope)
-4. **SST-Style Metadata**: [x] **DONE** - Discovery bucket for deployment state
-
----
-
-## Future Extensibility
-
-### Framework Support
-
-The library should support additional Vite + Nitro-based frameworks:
-- [ ] TanStack Start
-- [ ] Angular AnalogJS
-- [ ] SvelteKit
-- [ ] React Router v7
-- [ ] SolidStart
-
-Each framework construct will have preset configurations optimized for that framework.
-
-### Console UI
-
-Future scope: SST-style Console UI for:
-- Resource visualization
-- Log streaming
-- Real-time monitoring
-- Deployment history
-
-**Prerequisite**: Metadata Discovery system (already implemented)
-
----
-
 ## Status Overview
 
 | Feature | Status | Notes |
@@ -421,22 +360,17 @@ Future scope: SST-style Console UI for:
 | **Fargate Stack** | [x] **DONE** | Production-ready |
 | **EC2 Stack** | [x] **DONE** | Production-ready |
 | **Template Stack** | [x] **DONE** | Production-ready |
-| **Nuxt Stack** | [x] **DONE** | Production-ready |
-| **Astro Stack** | [x] **DONE** | Production-ready |
+| **Serverless Stack** | [x] **DONE** | Unified SSR stack for all meta-frameworks |
+| **Nuxt / Astro / TanStack / SvelteKit / SolidStart / AnalogJS** | [x] **DONE** | Framework wrappers over ServerlessStack |
 | **VPC Stack** | [x] **DONE** | Production-ready |
 | **VPC Link Pattern** | [x] **DONE** | All compute stacks |
 | **Monorepo Support** | [x] **DONE** | Path filters, rootDir |
 | **Nixpacks Integration** | [x] **DONE** | Auto Dockerfile gen |
-| **Metadata Discovery** | [x] **DONE** | SST-style in S3 |
+| **Metadata Discovery** | [x] **DONE** | SST-style in S3 (metadata.json + context.json) |
 | **CI/CD Pipelines** | [x] **DONE** | CodePipeline + GitHub |
 | **Bun Support** | [x] **DONE** | Lambda layer |
+| **EventBridge Pipeline Events** | [x] **DONE** | EventsConstruct for cross-account event forwarding |
 | **CLI Framework** | [x] **DONE** | Basic structure |
-| **th init Command** | [ ] **TODO** | Scaffold projects |
-| **th deploy Command** | [ ] **TODO** | Deploy stacks |
-| **th destroy Command** | [ ] **TODO** | Remove resources |
-| **Console UI** | [ ] **TODO** | Future scope |
-| **Additional Frameworks** | [ ] **TODO** | TanStack, SvelteKit, etc. |
-| **Claude Skills** | [ ] **TODO** | See SKILLS.md |
 
 ---
 
@@ -463,8 +397,12 @@ Future scope: SST-style Console UI for:
 
 ### Full-Stack SSR
 - **Nuxt.js**: Universal Vue applications
-- **Astro**: Content-focused websites with SSR
-- **Extensible**: TanStack Start, SvelteKit, AnalogJS (planned)
+- **Astro**: Content-focused websites with SSR (Lambda@Edge fallback)
+- **TanStack Start**: Type-safe full-stack React
+- **SvelteKit**: Svelte full-stack framework
+- **Solid Start**: SolidJS full-stack framework
+- **AnalogJS**: Angular full-stack framework
+- **Extensible**: Any Nitro/Vite-based framework via generic `Serverless` construct
 
 ---
 
@@ -522,7 +460,7 @@ npx cdk deploy --app "npx tsx stack/dev.ts" --profile default
 
 - **This PRD**: Project overview and architecture
 - **CLI.md**: CLI command reference and scope
-- **SKILLS.md**: Claude Code skills implementation plan
+- **SERVERLESS.md**: Serverless/SSR architecture details
 - **METADATA.md**: Discovery/metadata mechanism details
 
 ---
@@ -533,5 +471,5 @@ Apache-2.0
 
 ---
 
-**Last Updated**: 2026-03-08
+**Last Updated**: 2026-04-03
 **Status**: Production-ready stacks, CLI implementation in progress
