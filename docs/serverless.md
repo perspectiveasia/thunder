@@ -246,13 +246,11 @@ const config: ServerlessProps = {
 new Serverless(
   new Cdk.App(),
   'myapp-web-prod-stack',
-  { ...config, framework: 'custom' }
+  config
 );
 ```
 
 This works with any framework that outputs a Lambda-compatible handler and static assets.
-
-
 
 ```bash
 npx cdk destroy --app "npx tsx stack/prod.ts" --profile default
